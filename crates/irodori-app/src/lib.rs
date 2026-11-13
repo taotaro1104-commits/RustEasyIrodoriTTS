@@ -8,6 +8,7 @@ pub mod logging;
 pub mod meta;
 pub mod routes;
 pub mod security;
+pub mod settings_map;
 pub mod synth;
 
 use std::path::PathBuf;
