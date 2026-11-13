@@ -55,7 +55,11 @@ fn env(texts: &[&str], build: impl FnOnce(FakeSynth) -> FakeSynth) -> Env {
         })
         .unwrap();
     let synth = Arc::new(build(FakeSynth::new(dir.path())));
-    let jobs = JobManager::new(Arc::clone(&store), synth.clone() as Arc<dyn Synthesizer>);
+    let jobs = JobManager::new(
+        Arc::clone(&store),
+        synth.clone() as Arc<dyn Synthesizer>,
+        Arc::new(irodori_store::assets::Assets::new()),
+    );
     Env {
         dir,
         store,

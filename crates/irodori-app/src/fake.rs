@@ -25,6 +25,7 @@ pub struct FakeSynth {
     panics: HashSet<String>,
     missing: HashSet<String>,
     calls: Mutex<Vec<String>>,
+    last_job: Mutex<Option<SynthJob>>,
     loaded: AtomicBool,
     on_success: Option<Box<dyn Fn(&Path) + Send + Sync>>,
 }
@@ -39,6 +40,7 @@ impl FakeSynth {
             panics: HashSet::new(),
             missing: HashSet::new(),
             calls: Mutex::new(Vec::new()),
+            last_job: Mutex::new(None),
             loaded: AtomicBool::new(false),
             on_success: None,
         }
@@ -75,6 +77,14 @@ impl FakeSynth {
         self
     }
 
+    /// 最後に合成を頼まれた依頼（モード別に何を渡したかの確認に使う）。
+    pub fn last_job(&self) -> Option<SynthJob> {
+        self.last_job
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
     /// これまでに合成を頼まれた文章（呼ばれた順）。
     pub fn calls(&self) -> Vec<String> {
         self.calls.lock().unwrap_or_else(|e| e.into_inner()).clone()
@@ -93,6 +103,7 @@ impl Synthesizer for FakeSynth {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .push(job.text.clone());
+        *self.last_job.lock().unwrap_or_else(|e| e.into_inner()) = Some(job.clone());
         if self.panics.contains(&job.text) {
             panic!("fake synthesizer panic");
         }

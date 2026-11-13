@@ -53,10 +53,15 @@ impl AppState {
         backend: String,
         synth: Arc<dyn Synthesizer>,
     ) -> AppState {
-        let jobs = Arc::new(JobManager::new(Arc::clone(&store), Arc::clone(&synth)));
+        let assets = Arc::new(Assets::new());
+        let jobs = Arc::new(JobManager::new(
+            Arc::clone(&store),
+            Arc::clone(&synth),
+            Arc::clone(&assets),
+        ));
         AppState {
             store,
-            assets: Arc::new(Assets::new()),
+            assets,
             token,
             root,
             backend,

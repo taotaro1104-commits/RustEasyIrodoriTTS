@@ -16,18 +16,20 @@ use crate::synth::{SynthError, SynthJob, SynthRecord};
 
 pub(super) fn worker(inner: Arc<Inner>, rx: Receiver<Work>) {
     while let Ok(work) = rx.recv() {
-        run_work(&inner, work);
+        match work {
+            Work::Cards {
+                job_id,
+                project,
+                requests,
+            } => run_work(&inner, &job_id, &project, &requests),
+            Work::Design { job_id, request } => super::design::run(&inner, &job_id, request),
+        }
     }
 }
 
-fn run_work(inner: &Arc<Inner>, work: Work) {
-    let Work {
-        job_id,
-        project,
-        requests,
-    } = work;
+fn run_work(inner: &Arc<Inner>, job_id: &str, project: &str, requests: &[Request]) {
     let outcome = catch_unwind(AssertUnwindSafe(|| {
-        run_requests(inner, &job_id, &project, &requests)
+        run_requests(inner, job_id, project, requests)
     }));
     if outcome.is_err() {
         tracing::error!("generation job panicked outside a request");

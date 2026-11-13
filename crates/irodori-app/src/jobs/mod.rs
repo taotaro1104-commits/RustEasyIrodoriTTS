@@ -10,6 +10,7 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
+use irodori_store::assets::Assets;
 use irodori_store::generation::Generation;
 use irodori_store::{Result, Store, StoreError};
 use serde_json::{json, Value};
@@ -18,6 +19,11 @@ use irodori_core::control::Stage;
 
 use crate::synth::Synthesizer;
 
+pub use design::{DesignMode, DesignRequest, REGISTRATION_SAMPLE_TEXT};
+
+mod design;
+#[cfg(test)]
+mod design_tests;
 mod run;
 mod submit;
 #[cfg(test)]
@@ -57,9 +63,27 @@ pub(crate) struct Request {
     pub record: Value,
 }
 
+/// ジョブの種類。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Kind {
+    Generate,
+    Design,
+}
+
+impl Kind {
+    fn name(self) -> &'static str {
+        match self {
+            Kind::Generate => "generate",
+            Kind::Design => "design",
+        }
+    }
+}
+
 pub(crate) struct Job {
     pub id: String,
-    pub project: String,
+    pub kind: Kind,
+    /// 生成ジョブの台本の ID。声の試作では `None`。
+    pub project: Option<String>,
     pub status: String,
     pub done: usize,
     pub total: usize,
@@ -72,6 +96,12 @@ pub(crate) struct Job {
     pub watch: Watch,
     /// まだ処理していないカードの ID（順番どおり）。
     pub pending: Vec<String>,
+    /// 声の試作の候補（登録簿の鍵）。
+    pub assets: Vec<String>,
+    /// 声の試作の依頼（画面から受け取った値）。
+    pub creation: Value,
+    /// 声の試作の記録（完了後）。
+    pub record: Option<Value>,
 }
 
 /// 最後に見た `(ステップ, 段階)` と、それが変わらなくなってからの時間。
@@ -91,15 +121,23 @@ impl Watch {
     }
 }
 
-pub(crate) struct Work {
-    pub job_id: String,
-    pub project: String,
-    pub requests: Vec<Request>,
+pub(crate) enum Work {
+    Cards {
+        job_id: String,
+        project: String,
+        requests: Vec<Request>,
+    },
+    Design {
+        job_id: String,
+        request: DesignRequest,
+    },
 }
 
 pub(crate) struct Inner {
     pub store: Arc<Store>,
     pub synth: Arc<dyn Synthesizer>,
+    /// 声の試作の候補を載せる登録簿。
+    pub assets: Arc<Assets>,
     jobs: Mutex<Vec<Job>>,
     /// カードの状態・結果を保存できなかったときの理由（ジョブが「完了」と報告しないために、ワーカーが拾う）。
     save_error: Mutex<Option<String>>,
@@ -168,10 +206,11 @@ pub struct JobManager {
 }
 
 impl JobManager {
-    pub fn new(store: Arc<Store>, synth: Arc<dyn Synthesizer>) -> JobManager {
+    pub fn new(store: Arc<Store>, synth: Arc<dyn Synthesizer>, assets: Arc<Assets>) -> JobManager {
         let inner = Arc::new(Inner {
             store,
             synth,
+            assets,
             jobs: Mutex::new(Vec::new()),
             save_error: Mutex::new(None),
         });
@@ -225,7 +264,7 @@ impl JobManager {
         self.inner
             .jobs()
             .iter()
-            .filter(|j| j.project == pid && BUSY.contains(&j.status.as_str()))
+            .filter(|j| j.project.as_deref() == Some(pid) && BUSY.contains(&j.status.as_str()))
             .flat_map(|j| j.pending.iter().cloned())
             .collect()
     }
@@ -238,7 +277,7 @@ impl JobManager {
             .map(|j| {
                 json!({
                     "id": j.id, "project": j.project, "status": j.status, "done": j.done, "total": j.total, "error": j.error,
-                    "stopping": j.cancel.load(Ordering::SeqCst), "kind": "generate",
+                    "stopping": j.cancel.load(Ordering::SeqCst), "kind": j.kind.name(), "assets": j.assets,
                     "step": j.progress.load(Ordering::SeqCst), "steps": j.steps,
                     "stage": Stage::from_usize(j.stage.load(Ordering::SeqCst)).name(),
                 })

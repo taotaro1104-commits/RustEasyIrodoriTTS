@@ -12,7 +12,7 @@ use irodori_store::splitter::estimate;
 use irodori_store::{Result, StoreError};
 use serde_json::{json, Value};
 
-use super::{Job, JobManager, Request, SubmitOutcome, Watch, Work, BUSY};
+use super::{Job, JobManager, Kind, Request, SubmitOutcome, Watch, Work, BUSY};
 use crate::settings_map::{effective_steps, options_from};
 use crate::synth::SynthError;
 
@@ -24,7 +24,7 @@ fn invalid(message: &str) -> StoreError {
     StoreError::Invalid(message.into())
 }
 
-fn from_synth(e: SynthError) -> StoreError {
+pub(super) fn from_synth(e: SynthError) -> StoreError {
     match e {
         SynthError::Invalid(m) => StoreError::Invalid(m),
         SynthError::Cancelled => StoreError::Invalid("停止しました。".into()),
@@ -83,7 +83,8 @@ impl JobManager {
         let ids: HashSet<String> = requests.iter().map(|r| r.card_id.clone()).collect();
         let job = Job {
             id: uid(),
-            project: pid.to_string(),
+            kind: Kind::Generate,
+            project: Some(pid.to_string()),
             status: "待機中".into(),
             done: 0,
             total: requests.len(),
@@ -94,8 +95,11 @@ impl JobManager {
             stage: Arc::new(AtomicUsize::new(0)),
             watch: Watch::new(),
             pending: requests.iter().map(|r| r.card_id.clone()).collect(),
+            assets: Vec::new(),
+            creation: Value::Null,
+            record: None,
         };
-        let work = Work {
+        let work = Work::Cards {
             job_id: job.id.clone(),
             project: pid.to_string(),
             requests,
