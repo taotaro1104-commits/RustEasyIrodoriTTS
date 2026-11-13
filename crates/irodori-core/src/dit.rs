@@ -55,6 +55,8 @@ pub struct Dit {
     out_proj: Linear,
     head_dim: usize,
     timestep_dim: usize,
+    /// 重みの dtype。入力・条件は演算前にこれへ揃え、出力は呼び出し側の dtype に戻す。
+    dtype: candle_core::DType,
     has_speaker: bool,
     has_caption: bool,
 }
@@ -92,6 +94,7 @@ impl Dit {
             out_proj: linear(d, cfg.patched_latent_dim(), vb.pp("out_proj"))?,
             head_dim: d / cfg.num_heads,
             timestep_dim: cfg.timestep_embed_dim,
+            dtype: vb.dtype(),
             has_speaker: cfg.use_speaker_condition_resolved(),
             has_caption: cfg.use_caption_condition,
         })
@@ -99,6 +102,7 @@ impl Dit {
 
     /// サンプリング中は条件が不変なので、全ブロックの文脈 K/V を一度だけ射影して使い回せる。
     pub fn build_context_kv_cache(&self, c: &EncodedConditions) -> Result<ContextKv> {
+        let c = &c.to_dtype(self.dtype)?;
         self.blocks
             .iter()
             .map(|b| {
@@ -161,6 +165,8 @@ impl Dit {
         kv_cache: Option<&ContextKv>,
     ) -> Result<Tensor> {
         let (b, s, _) = x_t.dims3()?;
+        let (out_dtype, c) = (x_t.dtype(), &c.to_dtype(self.dtype)?);
+        let (x_t, t, delta_t) = (&x_t.to_dtype(self.dtype)?, t, delta_t);
         if let Some(cache) = kv_cache {
             if cache.len() != self.blocks.len() {
                 return Err(IrodoriError::InvalidInput(format!("kv cache has {} layers, model has {}", cache.len(), self.blocks.len())));
@@ -191,7 +197,7 @@ impl Dit {
             };
             x = block.forward(&x, &cond, kv, &kv_mask, &freqs)?;
         }
-        Ok(self.out_proj.forward(&self.out_norm.forward(&x)?)?.to_dtype(x_t.dtype())?)
+        Ok(self.out_proj.forward(&self.out_norm.forward(&x)?)?.to_dtype(out_dtype)?)
     }
 }
 
@@ -201,7 +207,7 @@ pub(crate) mod tests {
     use crate::conditioner::EncodedConditions;
     use crate::config::ModelConfig;
     use crate::joint_attention::test_spec::spec;
-    use crate::nn::test_util::{fake_tensor, vb_from_spec};
+    use crate::nn::test_util::fake_tensor;
     use candle_core::{Device, Tensor};
 
     pub(crate) const DIM: usize = 8;
@@ -238,14 +244,18 @@ pub(crate) mod tests {
     }
 
     pub(crate) fn dit() -> Dit {
-        dit_with(false)
+        dit_with(false, candle_core::DType::F32)
+    }
+
+    pub(crate) fn dit_dtype(dtype: candle_core::DType) -> Dit {
+        dit_with(false, dtype)
     }
 
     pub(crate) fn dit_meanflow() -> Dit {
-        dit_with(true)
+        dit_with(true, candle_core::DType::F32)
     }
 
-    fn dit_with(meanflow: bool) -> Dit {
+    fn dit_with(meanflow: bool, dtype: candle_core::DType) -> Dit {
         let mut sp: Vec<(String, Vec<usize>)> = vec![
             ("cond_module.0.weight".into(), vec![DIM, 4]),
             ("cond_module.2.weight".into(), vec![DIM, DIM]),
@@ -272,7 +282,7 @@ pub(crate) mod tests {
             sp.push(("delta_cond_module.2.weight".into(), vec![DIM, DIM]));
             sp.push(("delta_cond_module.4.weight".into(), vec![3 * DIM, DIM]));
         }
-        Dit::load(vb_from_spec(sp), &c).unwrap()
+        Dit::load(crate::nn::test_util::vb_from_spec_dtype(sp, dtype), &c).unwrap()
     }
 
     pub(crate) fn mask(v: &[u8]) -> Tensor {
@@ -369,6 +379,19 @@ pub(crate) mod tests {
         let cache = dit.build_context_kv_cache(&enc).unwrap();
         let vc = dit.forward_with_encoded_conditions(&g["x_t"], &g["t"], &enc, None, Some(&cache)).unwrap();
         close(&vc, "velocity");
+    }
+
+    #[test]
+    fn bf16_weights_accept_f32_inputs_and_stay_close_to_f32() {
+        let c = conds("txt");
+        let a = dit().forward_with_encoded_conditions(&x_t(), &t(), &c, None, None).unwrap();
+        let d16 = dit_dtype(candle_core::DType::BF16);
+        let b = d16.forward_with_encoded_conditions(&x_t(), &t(), &c, None, None).unwrap();
+        assert_eq!(b.dtype(), candle_core::DType::F32, "output keeps the caller's dtype");
+        crate::golden::assert_close(&a, &b, 8e-2, 8e-2).unwrap();
+        let cache = d16.build_context_kv_cache(&c).unwrap();
+        let bc = d16.forward_with_encoded_conditions(&x_t(), &t(), &c, None, Some(&cache)).unwrap();
+        crate::golden::assert_close(&b, &bc, 1e-6, 0.0).unwrap();
     }
 
     fn delta(v: f32) -> Tensor {

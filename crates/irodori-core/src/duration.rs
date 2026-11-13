@@ -61,8 +61,9 @@ fn select_mask(flags: &[bool], device: &Device) -> Result<Tensor> {
     Ok(Tensor::from_vec(v, (flags.len(), 1), device)?)
 }
 
-/// `vec * sel + null * (1 - sel)`。
+/// `vec * sel + null * (1 - sel)`。`sel` は `vec` の dtype に揃えて使う。
 fn choose(vec: &Tensor, null: &Tensor, sel: &Tensor) -> Result<Tensor> {
+    let sel = &sel.to_dtype(vec.dtype())?;
     Ok(vec.broadcast_mul(sel)?.broadcast_add(&null.unsqueeze(0)?.broadcast_mul(&sel.affine(-1.0, 1.0)?)?)?)
 }
 
@@ -111,7 +112,8 @@ impl DurationPredictor {
         let mut first = vec![0f32; s];
         first[0] = 1.0;
         let safe_mask = (&mask_f + empty.broadcast_mul(&Tensor::from_vec(first, (1, s), dev)?)?)?;
-        let x = c.text.broadcast_mul(&empty.affine(-1.0, 1.0)?.unsqueeze(2)?)?;
+        let dt = c.text.dtype();
+        let x = c.text.broadcast_mul(&empty.affine(-1.0, 1.0)?.unsqueeze(2)?.to_dtype(dt)?)?;
 
         let sel_spk = select_mask(has_speaker, dev)?;
         let speaker = match &c.speaker {
@@ -123,8 +125,8 @@ impl DurationPredictor {
             (Some(null), None) => Some(null.unsqueeze(0)?.broadcast_as((b, null.dim(0)?))?.contiguous()?),
             (Some(null), Some((state, mask))) => {
                 let m = mask.to_dtype(DType::F32)?.gt(0.0f32)?.to_dtype(DType::F32)?.broadcast_mul(&select_mask(has_caption, dev)?)?;
-                let denom = m.sum_keepdim(1)?.clamp(1.0, f64::MAX)?;
-                let mean = state.broadcast_mul(&m.unsqueeze(2)?)?.sum(1)?.broadcast_div(&denom)?;
+                let denom = m.sum_keepdim(1)?.clamp(1.0, f64::MAX)?.to_dtype(state.dtype())?;
+                let mean = state.broadcast_mul(&m.unsqueeze(2)?.to_dtype(state.dtype())?)?.sum(1)?.broadcast_div(&denom)?;
                 let any = m.sum_keepdim(1)?.gt(0.0f32)?.to_dtype(DType::F32)?;
                 Some(choose(&mean, null, &any)?)
             }
@@ -174,6 +176,10 @@ mod tests {
     /// token_out_proj の重みを `out_weight` で埋め、bias を `out_bias` にする。
     /// `out_weight=0` なら出力フレーム数は bias だけで決まる（解析的に検算できる）。
     fn predictor(arch: &str, out_bias: f32, out_weight: f32) -> DurationPredictor {
+        predictor_dtype(arch, out_bias, out_weight, candle_core::DType::F32)
+    }
+
+    fn predictor_dtype(arch: &str, out_bias: f32, out_weight: f32, dtype: candle_core::DType) -> DurationPredictor {
         let dual = arch.contains("dual");
         let mut sp: Vec<(String, Vec<usize>)> = vec![
             ("null_speaker".into(), vec![SPK]),
@@ -206,7 +212,7 @@ mod tests {
         }
         map.insert("token_out_proj.weight".into(), zeros(1, HID).affine(1.0, out_weight as f64).unwrap());
         map.insert("token_out_proj.bias".into(), Tensor::from_slice(&[out_bias], 1, &Device::Cpu).unwrap());
-        let vb = candle_nn::VarBuilder::from_tensors(map, candle_core::DType::F32, &Device::Cpu);
+        let vb = candle_nn::VarBuilder::from_tensors(map, dtype, &Device::Cpu);
         DurationPredictor::load(vb, &cfg(arch)).unwrap()
     }
 
@@ -269,6 +275,16 @@ mod tests {
         c.caption = Some((fake_tensor("different", &[1, 2, CAP]), mask(&[0, 0])));
         let b = p.predict_log_frames(&c, &[true], &[true]).unwrap();
         assert_eq!(value(&a), value(&b));
+    }
+
+    #[test]
+    fn bf16_weights_and_states_stay_close_to_f32() {
+        let c32 = conds(&[1, 1, 1, 1], "s", &[1, 1]);
+        let c16 = c32.to_dtype(candle_core::DType::BF16).unwrap();
+        let a = predictor(DUAL, 0.3, 0.7).predict_log_frames(&c32, &[true], &[true]).unwrap();
+        let b = predictor_dtype(DUAL, 0.3, 0.7, candle_core::DType::BF16).predict_log_frames(&c16, &[true], &[true]).unwrap();
+        assert_eq!(b.dtype(), candle_core::DType::F32);
+        assert!((value(&a) - value(&b)).abs() < 8e-2, "{} vs {}", value(&a), value(&b));
     }
 
     #[test]

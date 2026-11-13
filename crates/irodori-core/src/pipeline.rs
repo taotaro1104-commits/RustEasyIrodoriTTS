@@ -10,9 +10,9 @@ use candle_core::{DType, Device, Tensor};
 
 use crate::audio::loudness::normalize_loudness;
 use crate::audio::load_reference;
-use crate::codec::Codec;
+use crate::codec::{Codec, DECODE_CHUNK_FRAMES, DECODE_OVERLAP_FRAMES, ENCODE_CHUNK_FRAMES, ENCODE_OVERLAP_FRAMES};
 use crate::conditioner::{ConditionInputs, Conditioner};
-use crate::config::ModelConfig;
+use crate::config::{ModelConfig, TextEncoderConfig};
 use crate::dit::Dit;
 use crate::duration::DurationPredictor;
 use crate::loader::Weights;
@@ -159,32 +159,132 @@ fn random_seed() -> u64 {
     nanos ^ ((std::process::id() as u64) << 32)
 }
 
-pub struct Pipeline {
-    cfg: ModelConfig,
-    tokenizer: TextTokenizer,
+/// 重みの置き方。`Staged` は段階（参照 encode → 条件 → サンプリング → decode）ごとに必要な部品だけを
+/// mmap から読み、使い終えたら解放する（ピークメモリは最大の部品 1 つ分。呼び出しごとに再読み込みする）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MemoryMode {
+    Resident,
+    Staged,
+}
+
+#[derive(Clone, Debug)]
+pub struct PipelineOptions {
+    /// DiT / テキストエンコーダ / speaker / duration の重みの dtype。
+    pub dtype: DType,
+    /// codec の重みの dtype（入出力は常に F32）。
+    pub codec_dtype: DType,
+    pub memory: MemoryMode,
+}
+
+impl Default for PipelineOptions {
+    fn default() -> Self {
+        Self { dtype: DType::F32, codec_dtype: DType::F32, memory: MemoryMode::Resident }
+    }
+}
+
+struct Resident {
     conditioner: Conditioner,
     dit: Dit,
     duration: Option<DurationPredictor>,
     codec: Codec,
+}
+
+/// 常駐部品の借用か、段階ロードした所有物。
+enum Held<'a, T> {
+    Ref(&'a T),
+    Own(T),
+}
+
+impl<T> std::ops::Deref for Held<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        match self {
+            Held::Ref(r) => r,
+            Held::Own(o) => o,
+        }
+    }
+}
+
+pub struct Pipeline {
+    cfg: ModelConfig,
+    te: TextEncoderConfig,
+    tokenizer: TextTokenizer,
+    weights: Weights,
+    codec_pth: PathBuf,
     device: Device,
+    opts: PipelineOptions,
+    sample_rate: u32,
+    hop: usize,
+    resident: Option<Resident>,
 }
 
 impl Pipeline {
-    /// `model_safetensors` と同じフォルダの `tokenizer/tokenizer.json`、codec の `weights.pth` を読む。
+    /// F32・常駐で読む。
     pub fn load(model_safetensors: &Path, codec_pth: &Path, device: &Device) -> Result<Self> {
+        Self::load_with(model_safetensors, codec_pth, device, PipelineOptions::default())
+    }
+
+    /// `model_safetensors` と同じフォルダの `tokenizer/tokenizer.json`、codec の `weights.pth` を読む。
+    pub fn load_with(model_safetensors: &Path, codec_pth: &Path, device: &Device, opts: PipelineOptions) -> Result<Self> {
         let weights = Weights::open(model_safetensors, device)?;
         let (cfg, te) = weights.config()?;
-        let vb = weights.var_builder(DType::F32)?;
         let tok_path = model_safetensors.parent().unwrap_or(Path::new(".")).join("tokenizer").join("tokenizer.json");
-        Ok(Self {
-            tokenizer: TextTokenizer::from_file(&tok_path, te.bos_token_id, te.pad_token_id)?,
-            conditioner: Conditioner::load(vb.clone(), &cfg, &te)?,
-            dit: Dit::load(vb.clone(), &cfg)?,
-            duration: cfg.use_duration_predictor.then(|| DurationPredictor::load(vb.pp("duration_predictor"), &cfg)).transpose()?,
-            codec: Codec::load(codec_pth, device)?,
-            cfg,
-            device: device.clone(),
+        let tokenizer = TextTokenizer::from_file(&tok_path, te.bos_token_id, te.pad_token_id)?;
+        let codec = Codec::load_with_dtype(codec_pth, device, opts.codec_dtype)?;
+        let (sample_rate, hop) = (codec.sample_rate(), codec.hop());
+        let mut p = Self { cfg, te, tokenizer, weights, codec_pth: codec_pth.to_path_buf(), device: device.clone(), opts, sample_rate, hop, resident: None };
+        if p.opts.memory == MemoryMode::Resident {
+            p.resident = Some(Resident { conditioner: p.load_conditioner()?, dit: p.load_dit()?, duration: p.load_duration()?, codec });
+        }
+        Ok(p)
+    }
+
+    fn load_conditioner(&self) -> Result<Conditioner> {
+        Conditioner::load(self.weights.var_builder(self.opts.dtype)?, &self.cfg, &self.te)
+    }
+
+    fn load_dit(&self) -> Result<Dit> {
+        Dit::load(self.weights.var_builder(self.opts.dtype)?, &self.cfg)
+    }
+
+    fn load_duration(&self) -> Result<Option<DurationPredictor>> {
+        if !self.cfg.use_duration_predictor {
+            return Ok(None);
+        }
+        let vb = self.weights.var_builder(self.opts.dtype)?.pp("duration_predictor");
+        Ok(Some(DurationPredictor::load(vb, &self.cfg)?))
+    }
+
+    fn conditioner(&self) -> Result<Held<'_, Conditioner>> {
+        Ok(match &self.resident {
+            Some(r) => Held::Ref(&r.conditioner),
+            None => Held::Own(self.load_conditioner()?),
         })
+    }
+
+    fn dit(&self) -> Result<Held<'_, Dit>> {
+        Ok(match &self.resident {
+            Some(r) => Held::Ref(&r.dit),
+            None => Held::Own(self.load_dit()?),
+        })
+    }
+
+    fn duration(&self) -> Result<Held<'_, Option<DurationPredictor>>> {
+        Ok(match &self.resident {
+            Some(r) => Held::Ref(&r.duration),
+            None => Held::Own(self.load_duration()?),
+        })
+    }
+
+    fn codec(&self) -> Result<Held<'_, Codec>> {
+        Ok(match &self.resident {
+            Some(r) => Held::Ref(&r.codec),
+            None => Held::Own(Codec::load_with_dtype(&self.codec_pth, &self.device, self.opts.codec_dtype)?),
+        })
+    }
+
+    pub fn memory_mode(&self) -> MemoryMode {
+        self.opts.memory
     }
 
     fn token_tensors(&self, text: &str, max_len: usize, force_empty: bool) -> Result<(Tensor, Tensor)> {
@@ -206,13 +306,13 @@ impl Pipeline {
             let z = Tensor::zeros((1, len, self.cfg.latent_dim), DType::F32, &self.device)?;
             return Ok((z, Tensor::zeros((1, len), DType::U8, &self.device)?));
         };
-        let sr = self.codec.sample_rate();
+        let sr = self.sample_rate;
         let mut wav = load_reference(path, sr, self.cfg.ref_max_seconds as f32)?;
         normalize_loudness(&mut wav, sr, REF_TARGET_DB);
         let n = wav.len();
         let wav = Tensor::from_vec(wav, (1, 1, n), &self.device)?;
-        let mut z = self.codec.encode(&wav)?;
-        let max_steps = ((self.cfg.ref_max_seconds * sr as f64 / self.codec.hop() as f64).ceil() as usize).max(1);
+        let mut z = self.codec()?.encode_chunked(&wav, ENCODE_CHUNK_FRAMES, ENCODE_OVERLAP_FRAMES)?;
+        let max_steps = ((self.cfg.ref_max_seconds * sr as f64 / self.hop as f64).ceil() as usize).max(1);
         if z.dim(1)? > max_steps {
             z = z.narrow(1, 0, max_steps)?;
         }
@@ -224,7 +324,7 @@ impl Pipeline {
         req.validate()?;
         let cfg = &self.cfg;
         let seed = req.seed.unwrap_or_else(random_seed);
-        let (sr, hop) = (self.codec.sample_rate(), self.codec.hop());
+        let (sr, hop) = (self.sample_rate, self.hop);
 
         let text = normalize_text(&req.text).trim().to_string();
         if text.is_empty() {
@@ -242,26 +342,35 @@ impl Pipeline {
             .then(|| self.token_tensors(caption_text, cfg.max_caption_len.unwrap_or(512), caption_text.is_empty()))
             .transpose()?;
 
+        // 段階 1: 参照音声の encode（codec）
         let reference = cfg.use_speaker_condition_resolved().then(|| self.reference(req.ref_wav.as_deref())).transpose()?;
         let has_speaker = req.ref_wav.is_some() && reference.is_some();
-        let enc = self.conditioner.encode(&ConditionInputs {
-            text_ids: &text_ids,
-            text_mask: &text_mask,
-            caption_ids: caption.as_ref().map(|c| &c.0),
-            caption_mask: caption.as_ref().map(|c| &c.1),
-            ref_latent: reference.as_ref().map(|r| &r.0),
-            ref_mask: reference.as_ref().map(|r| &r.1),
-        })?;
 
-        let plan = match (req.seconds, &self.duration) {
-            (Some(s), _) => plan_manual(s, req.min_seconds, req.max_seconds, sr, hop),
-            (None, Some(d)) => {
-                let log_frames = d.predict_log_frames(&enc, &[has_speaker], &[has_caption])?.to_vec1::<f32>()?[0];
-                plan_predicted(log_frames, req.duration_scale, req.min_seconds, req.max_seconds, sr, hop)
-            }
-            (None, None) => plan_manual(FALLBACK_SECONDS, req.min_seconds, req.max_seconds.max(FALLBACK_SECONDS), sr, hop),
+        // 段階 2: 条件エンコードと長さ決定（テキストエンコーダ・speaker・duration）
+        let (enc, plan) = {
+            let conditioner = self.conditioner()?;
+            let enc = conditioner.encode(&ConditionInputs {
+                text_ids: &text_ids,
+                text_mask: &text_mask,
+                caption_ids: caption.as_ref().map(|c| &c.0),
+                caption_mask: caption.as_ref().map(|c| &c.1),
+                ref_latent: reference.as_ref().map(|r| &r.0),
+                ref_mask: reference.as_ref().map(|r| &r.1),
+            })?;
+            let plan = match req.seconds {
+                Some(s) => plan_manual(s, req.min_seconds, req.max_seconds, sr, hop),
+                None => match &*self.duration()? {
+                    Some(d) => {
+                        let log_frames = d.predict_log_frames(&enc, &[has_speaker], &[has_caption])?.to_vec1::<f32>()?[0];
+                        plan_predicted(log_frames, req.duration_scale, req.min_seconds, req.max_seconds, sr, hop)
+                    }
+                    None => plan_manual(FALLBACK_SECONDS, req.min_seconds, req.max_seconds.max(FALLBACK_SECONDS), sr, hop),
+                },
+            };
+            (enc, plan)
         };
 
+        // 段階 3: サンプリング（DiT）
         let dim = cfg.patched_latent_dim();
         let noise = match &req.noise {
             Some(n) => {
@@ -272,18 +381,23 @@ impl Pipeline {
             }
             None => initial_noise(seed, 1, plan.latent_steps, dim, &self.device)?,
         };
-        let z = if cfg.flow_parameterization.trim().eq_ignore_ascii_case("meanflow") {
-            sample_meanflow(&self.dit, &enc, req.num_steps.unwrap_or(4), &noise)?
-        } else {
-            let params = SamplerParams { num_steps: req.num_steps.unwrap_or(req.sampler.num_steps), ..req.sampler.clone() };
-            sample_euler_cfg(&self.dit, &enc, &params, &noise)?
+        let z = {
+            let dit = self.dit()?;
+            if cfg.flow_parameterization.trim().eq_ignore_ascii_case("meanflow") {
+                sample_meanflow(&dit, &enc, req.num_steps.unwrap_or(4), &noise)?
+            } else {
+                let params = SamplerParams { num_steps: req.num_steps.unwrap_or(req.sampler.num_steps), ..req.sampler.clone() };
+                sample_euler_cfg(&dit, &enc, &params, &noise)?
+            }
         };
+        drop(enc);
         let z = z.narrow(1, 0, plan.latent_steps)?;
 
+        // 段階 4: decode（codec）
         let rows = z.squeeze(0)?.to_vec2::<f32>()?;
         let flat = find_flattening_point(&rows, req.tail_window.max(1), req.tail_std_threshold, req.tail_mean_threshold);
         let limit = trim_limit(plan.target_samples, flat, hop, req.trim_tail);
-        let mut samples = self.codec.decode(&z)?.flatten_all()?.to_vec1::<f32>()?;
+        let mut samples = self.codec()?.decode_chunked(&z, DECODE_CHUNK_FRAMES, DECODE_OVERLAP_FRAMES)?.flatten_all()?.to_vec1::<f32>()?;
         samples.truncate(limit);
         Ok(SynthOutput { samples, sample_rate: sr, seed, latent: z, latent_steps: plan.latent_steps })
     }
@@ -360,6 +474,101 @@ mod tests {
         ] {
             assert!(bad.validate().is_err());
         }
+    }
+
+    fn max_abs(a: &[f32], b: &[f32]) -> f32 {
+        a.iter().zip(b).fold(0f32, |m, (x, y)| m.max((x - y).abs()))
+    }
+
+    /// 誤差の二乗平均平方根 / 正解の二乗平均平方根。
+    fn rel_rms(a: &[f32], b: &[f32]) -> f32 {
+        let err: f32 = a.iter().zip(b).map(|(x, y)| (x - y) * (x - y)).sum();
+        let sig: f32 = b.iter().map(|y| y * y).sum();
+        (err / sig.max(1e-12)).sqrt()
+    }
+
+    /// 参照なし・1 秒・8 ステップの合成を指定オプションで実行し、(潜在の最大誤差, 波形の最大誤差) を返す。
+    fn run_e2e(opts: PipelineOptions) -> Option<(f32, f32, f32)> {
+        use candle_core::Device;
+        let (Some(model_dir), Some(codec_dir), Some(_)) =
+            (std::env::var_os("IRODORI_MODEL_DIR"), std::env::var_os("IRODORI_CODEC_DIR"), crate::golden::dir())
+        else {
+            eprintln!("skip: IRODORI_MODEL_DIR / IRODORI_CODEC_DIR / IRODORI_GOLDEN_DIR not set");
+            return None;
+        };
+        let p = Pipeline::load_with(
+            &std::path::Path::new(&model_dir).join("model.safetensors"),
+            &std::path::Path::new(&codec_dir).join("weights.pth"),
+            &Device::Cpu,
+            opts,
+        )
+        .unwrap();
+        let g = crate::golden::load("e2e").unwrap();
+        let req = SynthRequest {
+            text: "こんにちは、世界。".into(),
+            caption: Some("落ち着いた女性の声".into()),
+            seconds: Some(1.0),
+            num_steps: Some(8),
+            trim_tail: false,
+            noise: Some(g["noise"].clone()),
+            ..SynthRequest::default()
+        };
+        let out = p.synthesize(&req).unwrap();
+        let lat: Vec<f32> = out.latent.flatten_all().unwrap().to_vec1().unwrap();
+        let want_lat: Vec<f32> = g["latent"].flatten_all().unwrap().to_vec1().unwrap();
+        let want_audio: Vec<f32> = g["audio"].flatten_all().unwrap().to_vec1().unwrap();
+        let (lat_rel, audio_rel) = (rel_rms(&lat, &want_lat), rel_rms(&out.samples, &want_audio[..out.samples.len()]));
+        eprintln!("relative rms error: latent {lat_rel:.3e}, audio {audio_rel:.3e}");
+        Some((max_abs(&lat, &want_lat), max_abs(&out.samples, &want_audio), lat_rel))
+    }
+
+    #[test]
+    fn real_meanflow_model_matches_python() {
+        use candle_core::Device;
+        let (Some(mf_dir), Some(codec_dir), Some(_)) =
+            (std::env::var_os("IRODORI_MF_DIR"), std::env::var_os("IRODORI_CODEC_DIR"), crate::golden::dir())
+        else {
+            eprintln!("skip: IRODORI_MF_DIR / IRODORI_CODEC_DIR / IRODORI_GOLDEN_DIR not set");
+            return;
+        };
+        let opts = PipelineOptions { memory: MemoryMode::Staged, ..PipelineOptions::default() };
+        let p = Pipeline::load_with(
+            &std::path::Path::new(&mf_dir).join("model.safetensors"),
+            &std::path::Path::new(&codec_dir).join("weights.pth"),
+            &Device::Cpu,
+            opts,
+        )
+        .unwrap();
+        let g = crate::golden::load("e2e_mf").unwrap();
+        let req = SynthRequest {
+            text: "こんにちは、世界。".into(),
+            caption: Some("落ち着いた女性の声".into()),
+            seconds: Some(1.0),
+            trim_tail: false,
+            noise: Some(g["noise"].clone()),
+            ..SynthRequest::default()
+        };
+        let out = p.synthesize(&req).unwrap(); // num_steps 未指定 → MeanFlow の既定 4
+        let lat: Vec<f32> = out.latent.flatten_all().unwrap().to_vec1().unwrap();
+        let want: Vec<f32> = g["latent"].flatten_all().unwrap().to_vec1().unwrap();
+        eprintln!("meanflow: latent max diff {:.2e}", max_abs(&lat, &want));
+        assert!(max_abs(&lat, &want) < 1e-3, "meanflow latent max diff {}", max_abs(&lat, &want));
+    }
+
+    #[test]
+    fn real_model_staged_f32_matches_python() {
+        let Some((lat, audio, _)) = run_e2e(PipelineOptions { memory: MemoryMode::Staged, ..PipelineOptions::default() }) else { return };
+        eprintln!("staged f32: latent {lat:.2e}, audio {audio:.2e}");
+        assert!(lat < 1e-3 && audio < 1e-3, "latent {lat}, audio {audio}");
+    }
+
+    #[test]
+    fn real_model_bf16_stays_close_to_python() {
+        let opts = PipelineOptions { dtype: DType::BF16, codec_dtype: DType::F32, memory: MemoryMode::Staged };
+        let Some((lat, audio, lat_rel)) = run_e2e(opts) else { return };
+        eprintln!("bf16 weights: latent {lat:.2e}, audio {audio:.2e}");
+        // 計画の基準: 潜在の相対誤差 < 5e-2（実測 4.1e-2）。
+        assert!(lat_rel < 5e-2, "latent relative rms error {lat_rel}");
     }
 
     #[test]

@@ -143,7 +143,8 @@ impl ReferenceLatentEncoder {
     /// `latent: (B, S, speaker_patched_latent_dim)`, `mask: (B, S)` → `(B, S, speaker_dim)`。
     pub fn forward(&self, latent: &Tensor, mask: &Tensor) -> Result<Tensor> {
         let (_, s, _) = latent.dims3()?;
-        let mut x = (self.in_proj.forward(latent)? / 6.0)?;
+        let latent = latent.to_dtype(self.in_proj.weight().dtype())?;
+        let mut x = (self.in_proj.forward(&latent)? / 6.0)?;
         let mask_f = mask.to_dtype(x.dtype())?.unsqueeze(2)?;
         x = x.broadcast_mul(&mask_f)?;
         let freqs = FreqsCis::new(self.head_dim, s, 10000.0, x.device())?;
@@ -194,6 +195,10 @@ mod tests {
     }
 
     fn fake_vb() -> VarBuilder<'static> {
+        fake_vb_dtype(DType::F32)
+    }
+
+    fn fake_vb_dtype(dtype: DType) -> VarBuilder<'static> {
         let mut spec: Vec<(String, Vec<usize>)> = vec![
             ("in_proj.weight".into(), vec![DIM, PATCHED]),
             ("in_proj.bias".into(), vec![DIM]),
@@ -212,7 +217,7 @@ mod tests {
             spec.push((format!("{p}mlp.w2.weight"), vec![DIM, HIDDEN]));
         }
         let map: HashMap<String, Tensor> = spec.into_iter().map(|(n, s)| { let t = fake(&n, &s); (n, t) }).collect();
-        VarBuilder::from_tensors(map, DType::F32, &Device::Cpu)
+        VarBuilder::from_tensors(map, dtype, &Device::Cpu)
     }
 
     fn latent(rows: usize, bias: f32) -> Tensor {
@@ -261,6 +266,15 @@ mod tests {
         assert_eq!(y.dims(), &[1, 5, DIM]);
         let tail = y.narrow(1, 3, 2).unwrap().flatten_all().unwrap().to_vec1::<f32>().unwrap();
         assert!(tail.iter().all(|v| *v == 0.0), "{tail:?}");
+    }
+
+    #[test]
+    fn bf16_weights_accept_an_f32_latent() {
+        let (i, mk) = (latent(5, 0.0), m(&[1, 1, 1, 0, 0]));
+        let y16 = ReferenceLatentEncoder::load(&cfg(), fake_vb_dtype(DType::BF16)).unwrap().forward(&i, &mk).unwrap();
+        let y32 = ReferenceLatentEncoder::load(&cfg(), fake_vb()).unwrap().forward(&i, &mk).unwrap();
+        assert_eq!(y16.dims(), &[1, 5, DIM]);
+        crate::golden::assert_close(&y16.to_dtype(DType::F32).unwrap(), &y32, 8e-2, 8e-2).unwrap();
     }
 
     #[test]

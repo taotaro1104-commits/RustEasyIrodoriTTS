@@ -21,6 +21,16 @@ pub struct EncodedConditions {
     pub caption: Option<(Tensor, Tensor)>,
 }
 
+impl EncodedConditions {
+    /// 状態テンソル（マスクは除く）を `dtype` に揃える。同じ dtype なら実質コピーなし。
+    pub fn to_dtype(&self, dtype: DType) -> Result<Self> {
+        let cast = |p: &Option<(Tensor, Tensor)>| -> Result<Option<(Tensor, Tensor)>> {
+            p.as_ref().map(|(s, m)| Ok((s.to_dtype(dtype)?, m.clone()))).transpose()
+        };
+        Ok(Self { text: self.text.to_dtype(dtype)?, text_mask: self.text_mask.clone(), speaker: cast(&self.speaker)?, caption: cast(&self.caption)? })
+    }
+}
+
 pub struct ConditionInputs<'a> {
     pub text_ids: &'a Tensor,
     pub text_mask: &'a Tensor,

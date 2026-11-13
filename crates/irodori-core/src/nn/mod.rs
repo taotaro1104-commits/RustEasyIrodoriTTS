@@ -72,9 +72,14 @@ pub(crate) mod test_util {
 
     /// `(テンソル名, 形状)` の一覧から合成 VarBuilder を作る。
     pub fn vb_from_spec(spec: Vec<(String, Vec<usize>)>) -> VarBuilder<'static> {
+        vb_from_spec_dtype(spec, DType::F32)
+    }
+
+    /// 取得時に `dtype` へ変換する合成 VarBuilder（bf16 重みのテスト用）。
+    pub fn vb_from_spec_dtype(spec: Vec<(String, Vec<usize>)>, dtype: DType) -> VarBuilder<'static> {
         let map: HashMap<String, Tensor> =
             spec.into_iter().map(|(n, s)| { let t = fake_tensor(&n, &s); (n, t) }).collect();
-        VarBuilder::from_tensors(map, DType::F32, &Device::Cpu)
+        VarBuilder::from_tensors(map, dtype, &Device::Cpu)
     }
 
     pub fn zeros(r: usize, c: usize) -> Tensor {

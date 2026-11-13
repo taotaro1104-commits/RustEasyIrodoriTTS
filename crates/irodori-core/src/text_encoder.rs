@@ -6,7 +6,7 @@
 
 use candle_core::Tensor;
 use candle_nn::{linear, Linear, Module, VarBuilder};
-use candle_transformers::models::modernbert::ModernBert;
+use crate::modernbert::ModernBert;
 
 use crate::config::{ModelConfig, TextEncoderConfig};
 use crate::nn::norm::RmsNorm;

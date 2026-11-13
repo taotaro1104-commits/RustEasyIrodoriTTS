@@ -2,7 +2,7 @@
 //!
 //! 既定値は上流 `config.py` の `ModelConfig` に合わせる（欠落フィールド用）。未知キーは無視する。
 
-use candle_transformers::models::modernbert::Config as ModernBertConfig;
+use crate::modernbert::Config as ModernBertConfig;
 use serde::Deserialize;
 
 use crate::{IrodoriError, Result};
@@ -240,7 +240,6 @@ impl TextEncoderConfig {
             global_rope_theta: self.rope_parameters.full_attention.rope_theta,
             local_attention: self.local_attention,
             local_rope_theta: self.rope_parameters.sliding_attention.rope_theta,
-            classifier_config: None,
         }
     }
 }
