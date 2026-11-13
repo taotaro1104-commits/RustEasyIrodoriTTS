@@ -1,0 +1,222 @@
+[
+  {
+    "input": "1",
+    "sorted": "1",
+    "pretty": "1"
+  },
+  {
+    "input": "1.0",
+    "sorted": "1.0",
+    "pretty": "1.0"
+  },
+  {
+    "input": "0.75",
+    "sorted": "0.75",
+    "pretty": "0.75"
+  },
+  {
+    "input": "-0.0",
+    "sorted": "-0.0",
+    "pretty": "-0.0"
+  },
+  {
+    "input": "0.0",
+    "sorted": "0.0",
+    "pretty": "0.0"
+  },
+  {
+    "input": "1e-05",
+    "sorted": "1e-05",
+    "pretty": "1e-05"
+  },
+  {
+    "input": "1e+16",
+    "sorted": "1e+16",
+    "pretty": "1e+16"
+  },
+  {
+    "input": "1e16",
+    "sorted": "1e+16",
+    "pretty": "1e+16"
+  },
+  {
+    "input": "1e15",
+    "sorted": "1000000000000000.0",
+    "pretty": "1000000000000000.0"
+  },
+  {
+    "input": "123456789.123",
+    "sorted": "123456789.123",
+    "pretty": "123456789.123"
+  },
+  {
+    "input": "0.0001",
+    "sorted": "0.0001",
+    "pretty": "0.0001"
+  },
+  {
+    "input": "0.00001",
+    "sorted": "1e-05",
+    "pretty": "1e-05"
+  },
+  {
+    "input": "1.5e-07",
+    "sorted": "1.5e-07",
+    "pretty": "1.5e-07"
+  },
+  {
+    "input": "123456789012345678.0",
+    "sorted": "1.2345678901234568e+17",
+    "pretty": "1.2345678901234568e+17"
+  },
+  {
+    "input": "1e22",
+    "sorted": "1e+22",
+    "pretty": "1e+22"
+  },
+  {
+    "input": "3.0",
+    "sorted": "3.0",
+    "pretty": "3.0"
+  },
+  {
+    "input": "-1.0",
+    "sorted": "-1.0",
+    "pretty": "-1.0"
+  },
+  {
+    "input": "2.5",
+    "sorted": "2.5",
+    "pretty": "2.5"
+  },
+  {
+    "input": "100",
+    "sorted": "100",
+    "pretty": "100"
+  },
+  {
+    "input": "0.1",
+    "sorted": "0.1",
+    "pretty": "0.1"
+  },
+  {
+    "input": "9007199254740993",
+    "sorted": "9007199254740993",
+    "pretty": "9007199254740993"
+  },
+  {
+    "input": "-42",
+    "sorted": "-42",
+    "pretty": "-42"
+  },
+  {
+    "input": "true",
+    "sorted": "true",
+    "pretty": "true"
+  },
+  {
+    "input": "false",
+    "sorted": "false",
+    "pretty": "false"
+  },
+  {
+    "input": "null",
+    "sorted": "null",
+    "pretty": "null"
+  },
+  {
+    "input": "\"日本語\"",
+    "sorted": "\"日本語\"",
+    "pretty": "\"日本語\""
+  },
+  {
+    "input": "\"abc\"",
+    "sorted": "\"abc\"",
+    "pretty": "\"abc\""
+  },
+  {
+    "input": "\"\\u0007\"",
+    "sorted": "\"\\u0007\"",
+    "pretty": "\"\\u0007\""
+  },
+  {
+    "input": "\"\\u007f\"",
+    "sorted": "\"\"",
+    "pretty": "\"\""
+  },
+  {
+    "input": "\"\\ud834\\udd1e\"",
+    "sorted": "\"𝄞\"",
+    "pretty": "\"𝄞\""
+  },
+  {
+    "input": "\"line\\nbreak\\ttab\"",
+    "sorted": "\"line\\nbreak\\ttab\"",
+    "pretty": "\"line\\nbreak\\ttab\""
+  },
+  {
+    "input": "\"quote\\\" and back\\\\slash\"",
+    "sorted": "\"quote\\\" and back\\\\slash\"",
+    "pretty": "\"quote\\\" and back\\\\slash\""
+  },
+  {
+    "input": "\"\\u001f\"",
+    "sorted": "\"\\u001f\"",
+    "pretty": "\"\\u001f\""
+  },
+  {
+    "input": "\"😀 emoji\"",
+    "sorted": "\"😀 emoji\"",
+    "pretty": "\"😀 emoji\""
+  },
+  {
+    "input": "\"\"",
+    "sorted": "\"\"",
+    "pretty": "\"\""
+  },
+  {
+    "input": "[]",
+    "sorted": "[]",
+    "pretty": "[]"
+  },
+  {
+    "input": "{}",
+    "sorted": "{}",
+    "pretty": "{}"
+  },
+  {
+    "input": "[1, 2.0, 3.5]",
+    "sorted": "[1, 2.0, 3.5]",
+    "pretty": "[\n  1,\n  2.0,\n  3.5\n]"
+  },
+  {
+    "input": "{\"b\": 1, \"a\": 2}",
+    "sorted": "{\"a\": 2, \"b\": 1}",
+    "pretty": "{\n  \"b\": 1,\n  \"a\": 2\n}"
+  },
+  {
+    "input": "{\"b\": {\"z\": 1, \"y\": [1, {\"k\": null}]}, \"a\": []}",
+    "sorted": "{\"a\": [], \"b\": {\"y\": [1, {\"k\": null}], \"z\": 1}}",
+    "pretty": "{\n  \"b\": {\n    \"z\": 1,\n    \"y\": [\n      1,\n      {\n        \"k\": null\n      }\n    ]\n  },\n  \"a\": []\n}"
+  },
+  {
+    "input": "{\"日本語\": \"値\", \"a\": 1.0, \"B\": 2}",
+    "sorted": "{\"B\": 2, \"a\": 1.0, \"日本語\": \"値\"}",
+    "pretty": "{\n  \"日本語\": \"値\",\n  \"a\": 1.0,\n  \"B\": 2\n}"
+  },
+  {
+    "input": "{\"\": 1, \" \": 2}",
+    "sorted": "{\"\": 1, \" \": 2}",
+    "pretty": "{\n  \"\": 1,\n  \" \": 2\n}"
+  },
+  {
+    "input": "[[], {}, [[]], {\"a\": {}}]",
+    "sorted": "[[], {}, [[]], {\"a\": {}}]",
+    "pretty": "[\n  [],\n  {},\n  [\n    []\n  ],\n  {\n    \"a\": {}\n  }\n]"
+  },
+  {
+    "input": "{\"speed\": 1.0, \"silence\": 0.0, \"steps\": null, \"seed\": null, \"flag\": true}",
+    "sorted": "{\"flag\": true, \"seed\": null, \"silence\": 0.0, \"speed\": 1.0, \"steps\": null}",
+    "pretty": "{\n  \"speed\": 1.0,\n  \"silence\": 0.0,\n  \"steps\": null,\n  \"seed\": null,\n  \"flag\": true\n}"
+  }
+]

@@ -30,6 +30,30 @@ def fixture(name: str):
     return deco
 
 
+@fixture("py_json_cases")
+def py_json_cases() -> list[dict]:
+    """Task 2: `json.dumps` の出力（sort_keys 版と indent=2 版）。入力は JSON 文字列。"""
+    inputs = [
+        "1", "1.0", "0.75", "-0.0", "0.0", "1e-05", "1e+16", "1e16", "1e15", "123456789.123",
+        "0.0001", "0.00001", "1.5e-07", "123456789012345678.0", "1e22", "3.0", "-1.0", "2.5", "100", "0.1",
+        "9007199254740993", "-42", "true", "false", "null",
+        '"日本語"', '"abc"', '"\\u0007"', '"\\u007f"', '"\\ud834\\udd1e"', '"line\\nbreak\\ttab"',
+        '"quote\\" and back\\\\slash"', '"\\u001f"', '"😀 emoji"', '""',
+        "[]", "{}", "[1, 2.0, 3.5]", '{"b": 1, "a": 2}', '{"b": {"z": 1, "y": [1, {"k": null}]}, "a": []}',
+        '{"日本語": "値", "a": 1.0, "B": 2}', '{"": 1, " ": 2}',
+        '[[], {}, [[]], {"a": {}}]', '{"speed": 1.0, "silence": 0.0, "steps": null, "seed": null, "flag": true}',
+    ]
+    cases = []
+    for text in inputs:
+        value = json.loads(text)
+        cases.append(dict(
+            input=text,
+            sorted=json.dumps(value, ensure_ascii=False, sort_keys=True),
+            pretty=json.dumps(value, ensure_ascii=False, indent=2),
+        ))
+    return cases
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, required=True)
