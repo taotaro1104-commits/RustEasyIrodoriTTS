@@ -31,6 +31,9 @@ pub enum IrodoriError {
     EmptyText,
     #[error("text too long: {tokens} tokens (including BOS) > max {max}")]
     TextTooLong { tokens: usize, max: usize },
+    /// 呼び出し側が取消を要求した（`control::Control`）。
+    #[error("cancelled")]
+    Cancelled,
     #[error("golden mismatch: {0}")]
     GoldenMismatch(String),
     #[error("golden file not found: {0}")]

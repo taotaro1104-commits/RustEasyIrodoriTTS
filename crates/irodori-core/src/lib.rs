@@ -5,6 +5,7 @@ pub mod audio;
 pub mod codec;
 pub mod conditioner;
 pub mod config;
+pub mod control;
 pub mod dit;
 pub mod duration;
 pub mod golden;

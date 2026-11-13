@@ -7,6 +7,7 @@
 use candle_core::{Device, Tensor};
 
 use crate::conditioner::EncodedConditions;
+use crate::control::Control;
 use crate::dit::{ContextKv, Dit};
 use crate::rng::normal_vec;
 use crate::{IrodoriError, Result};
@@ -200,6 +201,11 @@ fn enabled_guidance(cond: &EncodedConditions, p: &SamplerParams) -> Result<Vec<(
 
 /// RF の Euler サンプリング。`noise: (B, T, patched_latent_dim)`。戻り値は同形のパッチ化済み潜在。
 pub fn sample_euler_cfg(dit: &Dit, cond: &EncodedConditions, p: &SamplerParams, noise: &Tensor) -> Result<Tensor> {
+    sample_euler_cfg_ctl(dit, cond, p, noise, &Control::default())
+}
+
+/// `sample_euler_cfg` に取消・進捗のフックを付けたもの。各ステップの先頭で取消を確認し、終わりで進捗を進める。
+pub fn sample_euler_cfg_ctl(dit: &Dit, cond: &EncodedConditions, p: &SamplerParams, noise: &Tensor, ctl: &Control) -> Result<Tensor> {
     let ts = t_schedule(p.num_steps, p.schedule, p.sway_coeff)?;
     let has_speaker = match &cond.speaker {
         Some((_, m)) => any_valid(m)?,
@@ -243,6 +249,7 @@ pub fn sample_euler_cfg(dit: &Dit, cond: &EncodedConditions, p: &SamplerParams, 
     let mut x = apply_truncation(noise, p.truncation_factor)?;
     let batch = x.dim(0)?;
     for i in 0..p.num_steps {
+        ctl.check()?;
         let (t, t_next) = (ts[i], ts[i + 1]);
         let tt = Tensor::full(t, batch, x.device())?.to_dtype(x.dtype())?;
         let v_c = velocity(dit, &x, &tt, cond, &cond_cache)?;
@@ -271,12 +278,18 @@ pub fn sample_euler_cfg(dit: &Dit, cond: &EncodedConditions, p: &SamplerParams, 
             }
         }
         x = (x + v.affine((t_next - t) as f64, 0.0)?)?;
+        ctl.set_progress(i + 1);
     }
     Ok(x)
 }
 
 /// MeanFlow の線形サンプラ（`t: 1 → 0`、CFG なし、既定 4 ステップ）。
 pub fn sample_meanflow(dit: &Dit, cond: &EncodedConditions, num_steps: usize, noise: &Tensor) -> Result<Tensor> {
+    sample_meanflow_ctl(dit, cond, num_steps, noise, &Control::default())
+}
+
+/// `sample_meanflow` に取消・進捗のフックを付けたもの。
+pub fn sample_meanflow_ctl(dit: &Dit, cond: &EncodedConditions, num_steps: usize, noise: &Tensor, ctl: &Control) -> Result<Tensor> {
     if num_steps == 0 {
         return Err(IrodoriError::InvalidInput("MeanFlow num_steps must be positive".into()));
     }
@@ -285,11 +298,13 @@ pub fn sample_meanflow(dit: &Dit, cond: &EncodedConditions, num_steps: usize, no
     let batch = x.dim(0)?;
     let sched: Vec<f32> = (0..=num_steps).map(|i| 1.0 - i as f32 / num_steps as f32).collect();
     for i in 0..num_steps {
+        ctl.check()?;
         let (t, next) = (sched[i], sched[i + 1]);
         let tt = Tensor::full(t, batch, x.device())?.to_dtype(x.dtype())?;
         let delta = Tensor::full(t - next, batch, x.device())?.to_dtype(x.dtype())?;
         let v = dit.forward_meanflow(&x, &tt, &delta, cond, None, Some(&cache))?;
         x = (x + v.affine((next - t) as f64, 0.0)?)?;
+        ctl.set_progress(i + 1);
     }
     Ok(x)
 }

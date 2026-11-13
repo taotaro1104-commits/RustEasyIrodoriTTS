@@ -13,11 +13,12 @@ use crate::audio::load_reference;
 use crate::codec::{Codec, DECODE_CHUNK_FRAMES, DECODE_OVERLAP_FRAMES, ENCODE_CHUNK_FRAMES, ENCODE_OVERLAP_FRAMES};
 use crate::conditioner::{ConditionInputs, Conditioner};
 use crate::config::{ModelConfig, TextEncoderConfig};
+use crate::control::Control;
 use crate::dit::Dit;
 use crate::duration::DurationPredictor;
 use crate::loader::Weights;
 use crate::normalize::normalize_text;
-use crate::sampler::{initial_noise, sample_euler_cfg, sample_meanflow, SamplerParams};
+use crate::sampler::{initial_noise, sample_euler_cfg_ctl, sample_meanflow_ctl, SamplerParams};
 use crate::text_tokenizer::TextTokenizer;
 use crate::{IrodoriError, Result};
 
@@ -47,6 +48,11 @@ pub struct SynthRequest {
     pub tail_mean_threshold: f32,
     /// テスト用: 初期ノイズを外から与える（形状 `(1, T_patched, patched_latent_dim)`）。
     pub noise: Option<Tensor>,
+    /// 取消・進捗のフック（既定は何もしない）。
+    pub control: Control,
+    /// モデルの上限より小さい上限を指定する（大きい値はモデルの上限に丸める）。
+    pub max_text_len: Option<usize>,
+    pub max_caption_len: Option<usize>,
 }
 
 impl Default for SynthRequest {
@@ -67,6 +73,9 @@ impl Default for SynthRequest {
             tail_std_threshold: 0.05,
             tail_mean_threshold: 0.1,
             noise: None,
+            control: Control::default(),
+            max_text_len: None,
+            max_caption_len: None,
         }
     }
 }
@@ -345,15 +354,17 @@ impl Pipeline {
             return Err(IrodoriError::EmptyText);
         }
         let n_tokens = self.tokenizer.encode(&text)?.len();
-        if n_tokens > cfg.max_text_len {
-            return Err(IrodoriError::TextTooLong { tokens: n_tokens, max: cfg.max_text_len });
+        let text_limit = req.max_text_len.map_or(cfg.max_text_len, |l| l.min(cfg.max_text_len));
+        if n_tokens > text_limit {
+            return Err(IrodoriError::TextTooLong { tokens: n_tokens, max: text_limit });
         }
+        req.control.set_progress(0);
         let (text_ids, text_mask) = self.token_tensors(&text, cfg.max_text_len, false)?;
         let caption_text = req.caption.as_deref().map(str::trim).unwrap_or("");
         let has_caption = cfg.use_caption_condition && !caption_text.is_empty();
         let caption = cfg
             .use_caption_condition
-            .then(|| self.token_tensors(caption_text, cfg.max_caption_len.unwrap_or(512), caption_text.is_empty()))
+            .then(|| self.token_tensors(caption_text, req.max_caption_len.map_or(cfg.max_caption_len.unwrap_or(512), |l| l.min(cfg.max_caption_len.unwrap_or(512))), caption_text.is_empty()))
             .transpose()?;
 
         let mut timings: Vec<(&'static str, f64)> = Vec::new();
@@ -362,6 +373,7 @@ impl Pipeline {
         // 段階 1: 参照音声の encode（codec）
         let reference = cfg.use_speaker_condition_resolved().then(|| self.reference(req.ref_wav.as_deref())).transpose()?;
         let has_speaker = req.ref_wav.is_some() && reference.is_some();
+        req.control.check()?;
         timings.push(("reference", mark.elapsed().as_secs_f64()));
         mark = std::time::Instant::now();
 
@@ -388,6 +400,7 @@ impl Pipeline {
             };
             (enc, plan)
         };
+        req.control.check()?;
 
         timings.push(("conditions", mark.elapsed().as_secs_f64()));
         mark = std::time::Instant::now();
@@ -412,13 +425,14 @@ impl Pipeline {
         let z = {
             let dit = self.dit()?;
             if cfg.flow_parameterization.trim().eq_ignore_ascii_case("meanflow") {
-                sample_meanflow(&dit, &enc, req.num_steps.unwrap_or(4), &noise)?
+                sample_meanflow_ctl(&dit, &enc, req.num_steps.unwrap_or(4), &noise, &req.control)?
             } else {
                 let params = SamplerParams { num_steps: req.num_steps.unwrap_or(req.sampler.num_steps), ..req.sampler.clone() };
-                sample_euler_cfg(&dit, &enc, &params, &noise)?
+                sample_euler_cfg_ctl(&dit, &enc, &params, &noise, &req.control)?
             }
         };
         drop(enc);
+        req.control.check()?;
         timings.push(("sampling", mark.elapsed().as_secs_f64()));
         mark = std::time::Instant::now();
         let z = z.narrow(1, 0, plan.latent_steps)?;
@@ -728,6 +742,52 @@ mod tests {
         let want: Vec<f32> = g["latent"].flatten_all().unwrap().to_vec1().unwrap();
         eprintln!("meanflow: latent max diff {:.2e}", max_abs(&lat, &want));
         assert!(max_abs(&lat, &want) < 1e-3, "meanflow latent max diff {}", max_abs(&lat, &want));
+    }
+
+    #[test]
+    fn real_meanflow_reports_progress_and_can_be_cancelled() {
+        use candle_core::Device;
+        use std::sync::atomic::Ordering;
+        let (Some(mf_dir), Some(codec_dir)) = (std::env::var_os("IRODORI_MF_DIR"), std::env::var_os("IRODORI_CODEC_DIR")) else {
+            eprintln!("skip: IRODORI_MF_DIR / IRODORI_CODEC_DIR not set");
+            return;
+        };
+        let opts = PipelineOptions { memory: MemoryMode::Staged, ..PipelineOptions::default() };
+        let p = Pipeline::load_with(
+            &std::path::Path::new(&mf_dir).join("model.safetensors"),
+            &std::path::Path::new(&codec_dir).join("weights.pth"),
+            &Device::Cpu,
+            opts,
+        )
+        .unwrap();
+        let base = SynthRequest { text: "こんにちは、世界。".into(), seconds: Some(1.0), seed: Some(1), ..SynthRequest::default() };
+
+        // 通常: 4 ステップすべて進む
+        let ctl = Control::new();
+        p.synthesize(&SynthRequest { control: ctl.clone(), ..base.clone() }).unwrap();
+        assert_eq!(ctl.progress.as_ref().unwrap().load(Ordering::SeqCst), 4);
+
+        // 取消済みで開始: 1 ステップも進まない
+        let ctl = Control::new();
+        ctl.cancel.as_ref().unwrap().store(true, Ordering::SeqCst);
+        let err = p.synthesize(&SynthRequest { control: ctl.clone(), ..base.clone() }).err().expect("cancelled");
+        assert!(matches!(err, IrodoriError::Cancelled), "{err}");
+        assert_eq!(ctl.progress.as_ref().unwrap().load(Ordering::SeqCst), 0);
+
+        // 実行中に取消: 進捗が 1 になったところで別スレッドが取消 → 最後まで進まず止まる
+        let ctl = Control::new();
+        let (cancel, progress) = (ctl.cancel.clone().unwrap(), ctl.progress.clone().unwrap());
+        let watcher = std::thread::spawn(move || {
+            while progress.load(Ordering::SeqCst) < 1 {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            cancel.store(true, Ordering::SeqCst);
+        });
+        let err = p.synthesize(&SynthRequest { control: ctl.clone(), ..base }).err().expect("cancelled mid-run");
+        watcher.join().unwrap();
+        assert!(matches!(err, IrodoriError::Cancelled), "{err}");
+        let done = ctl.progress.as_ref().unwrap().load(Ordering::SeqCst);
+        assert!((1..4).contains(&done), "stopped after {done} of 4 steps");
     }
 
     #[test]
