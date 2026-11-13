@@ -114,6 +114,12 @@ impl Synthesizer for RealSynth {
 
         let started = Instant::now();
         let id = uid();
+        tracing::info!(
+            "generation {id} started: model={} candidates={} chars={}",
+            job.model,
+            job.candidates,
+            job.text.chars().count()
+        );
         let folder = std::path::absolute(self.root.join("outputs").join("internal").join(&id))
             .map_err(|e| SynthError::Failed(e.to_string()))?;
         let control = Control {
@@ -141,6 +147,12 @@ impl Synthesizer for RealSynth {
             let output = runtime
                 .run(&request)
                 .map_err(|e| map_error(e, has_reference))?;
+            tracing::info!(
+                "generation {id}: candidate {} synthesized at {:.1}s (stages: {:?})",
+                candidate + 1,
+                started.elapsed().as_secs_f64(),
+                output.timings
+            );
             std::fs::create_dir_all(&folder).map_err(|e| SynthError::Failed(e.to_string()))?;
             let path = folder.join(format!("{:02}.wav", candidate + 1));
             irodori_core::audio::write_wav(&path, &output.samples, output.sample_rate)
@@ -171,6 +183,11 @@ impl Synthesizer for RealSynth {
             "paths": record.paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),
             "seconds": record.seconds, "messages": record.messages,
         });
+        tracing::info!(
+            "generation {id}: {} file(s) written at {:.1}s",
+            record.paths.len(),
+            started.elapsed().as_secs_f64()
+        );
         atomic_json(&folder.join("generation.json"), &meta)
             .map_err(|e| SynthError::Failed(e.message().to_string()))?;
         Ok(record)
@@ -356,5 +373,29 @@ mod tests {
 
         synth.unload();
         assert!(!synth.is_loaded());
+    }
+
+    /// 参照音声つき（`IRODORI_REF_WAV` が参照用の WAV を指すとき）。話者を使う通常の生成と同じ経路。
+    #[test]
+    fn real_generation_with_a_reference_voice_finishes() {
+        let (Some(hub), Some(reference)) = (
+            std::env::var_os("IRODORI_HUB_DIR"),
+            std::env::var_os("IRODORI_REF_WAV"),
+        ) else {
+            eprintln!("skip: IRODORI_HUB_DIR / IRODORI_REF_WAV not set");
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let synth = RealSynth::new(dir.path().to_path_buf(), hub.into());
+        let mut job = SynthJob::new(
+            "こんにちは。今日はいい天気ですね。",
+            MF,
+            default_generation(),
+        );
+        job.caption = "落ち着いた女性の声".into();
+        job.references = vec![reference.into()];
+        let record = synth.synthesize(&job).unwrap();
+        assert!(record.paths[0].exists());
+        assert_eq!(job.progress.load(Ordering::SeqCst), 4);
     }
 }
