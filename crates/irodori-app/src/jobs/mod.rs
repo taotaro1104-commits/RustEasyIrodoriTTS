@@ -8,10 +8,13 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 use irodori_store::generation::Generation;
 use irodori_store::{Result, Store, StoreError};
 use serde_json::{json, Value};
+
+use irodori_core::control::Stage;
 
 use crate::synth::Synthesizer;
 
@@ -22,6 +25,9 @@ mod tests;
 
 /// 画面に返す履歴として残す、終わったジョブの上限。
 const KEEP_JOBS: usize = 50;
+/// これだけの間ステップも段階も変わらない生成を「止まり」としてログに出す。
+const STALL_AFTER: Duration = Duration::from_secs(120);
+const WATCH_EVERY: Duration = Duration::from_secs(15);
 /// まだ終わっていないジョブの状態。
 pub(crate) const BUSY: [&str; 2] = ["待機中", "生成中"];
 /// 想定外の失敗でカードに表示する文（詳細はログにだけ出す）。
@@ -61,8 +67,28 @@ pub(crate) struct Job {
     pub steps: usize,
     pub cancel: Arc<AtomicBool>,
     pub progress: Arc<AtomicUsize>,
+    pub stage: Arc<AtomicUsize>,
+    /// 止まり（長い間、ステップも段階も変わらない）を見つけるための記録。
+    pub watch: Watch,
     /// まだ処理していないカードの ID（順番どおり）。
     pub pending: Vec<String>,
+}
+
+/// 最後に見た `(ステップ, 段階)` と、それが変わらなくなってからの時間。
+pub(crate) struct Watch {
+    seen: (usize, usize),
+    since: Instant,
+    warned: bool,
+}
+
+impl Watch {
+    pub fn new() -> Watch {
+        Watch {
+            seen: (0, 0),
+            since: Instant::now(),
+            warned: false,
+        }
+    }
 }
 
 pub(crate) struct Work {
@@ -82,6 +108,37 @@ pub(crate) struct Inner {
 impl Inner {
     pub fn jobs(&self) -> MutexGuard<'_, Vec<Job>> {
         self.jobs.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// 生成中のジョブのうち、`threshold` 以上ステップも段階も変わっていないものを、止まりとして 1 度だけ知らせる。
+    pub fn check_stalls(&self, now: Instant, threshold: Duration) -> Vec<String> {
+        let mut found = Vec::new();
+        for job in self.jobs().iter_mut().filter(|j| j.status == "生成中") {
+            let current = (
+                job.progress.load(Ordering::SeqCst),
+                job.stage.load(Ordering::SeqCst),
+            );
+            if current != job.watch.seen {
+                job.watch = Watch {
+                    seen: current,
+                    since: now,
+                    warned: false,
+                };
+            } else if !job.watch.warned
+                && now.saturating_duration_since(job.watch.since) >= threshold
+            {
+                job.watch.warned = true;
+                found.push(format!(
+                    "generation job {} seems stalled: stage={} step {}/{} unchanged for {}s",
+                    job.id,
+                    Stage::from_usize(current.1).name(),
+                    current.0,
+                    job.steps,
+                    now.saturating_duration_since(job.watch.since).as_secs()
+                ));
+            }
+        }
+        found
     }
 
     pub fn note_save_error(&self, message: String) {
@@ -119,6 +176,18 @@ impl JobManager {
             save_error: Mutex::new(None),
         });
         let (tx, rx) = mpsc::channel();
+        // 長い間なにも進まない生成を、ログに残す（固まったときに、どの段階かを後から知るため）。
+        let weak = Arc::downgrade(&inner);
+        std::thread::Builder::new()
+            .name("easy-synthesis-watchdog".into())
+            .spawn(move || loop {
+                std::thread::sleep(WATCH_EVERY);
+                let Some(inner) = weak.upgrade() else { break };
+                for message in inner.check_stalls(Instant::now(), STALL_AFTER) {
+                    tracing::warn!("{message}");
+                }
+            })
+            .expect("spawn the watchdog");
         let worker = Arc::clone(&inner);
         std::thread::Builder::new()
             .name("easy-synthesis".into())
@@ -171,6 +240,7 @@ impl JobManager {
                     "id": j.id, "project": j.project, "status": j.status, "done": j.done, "total": j.total, "error": j.error,
                     "stopping": j.cancel.load(Ordering::SeqCst), "kind": "generate",
                     "step": j.progress.load(Ordering::SeqCst), "steps": j.steps,
+                    "stage": Stage::from_usize(j.stage.load(Ordering::SeqCst)).name(),
                 })
             })
             .collect()
@@ -183,6 +253,11 @@ impl JobManager {
         }
         self.inner.synth.unload();
         Ok(())
+    }
+
+    /// 止まりの検出（`Inner::check_stalls`）。ワーカーとは別のスレッドが定期的に呼ぶ。
+    pub fn check_stalls(&self, now: Instant, threshold: Duration) -> Vec<String> {
+        self.inner.check_stalls(now, threshold)
     }
 
     /// 履歴が増えすぎないよう、終わった古いジョブから捨てる。

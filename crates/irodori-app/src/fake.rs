@@ -115,6 +115,10 @@ impl Synthesizer for FakeSynth {
         let mut paths = Vec::with_capacity(job.candidates.max(1));
         for candidate in 0..job.candidates.max(1) {
             job.progress.store(0, Ordering::SeqCst);
+            job.stage.store(
+                irodori_core::control::Stage::Sampling as usize,
+                Ordering::SeqCst,
+            );
             for step in 0..self.steps {
                 if job.cancel.load(Ordering::SeqCst) {
                     return Err(SynthError::Cancelled);

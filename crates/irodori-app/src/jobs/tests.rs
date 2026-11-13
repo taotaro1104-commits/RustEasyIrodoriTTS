@@ -636,3 +636,61 @@ fn a_failed_result_save_is_reported_as_a_job_error_not_as_success() {
     );
     assert_eq!(e.jobs.jobs_json().len(), 1);
 }
+
+#[test]
+fn a_job_that_stops_making_progress_is_reported_as_stalled_once() {
+    let e = env(&["一つ目です。"], |s| {
+        s.with_steps(100).with_step_delay(Duration::from_secs(3))
+    });
+    assert_eq!(
+        e.submit(None, false, false).unwrap(),
+        SubmitOutcome::Started
+    );
+    e.wait_for("the first step", |j| j["step"].as_u64().unwrap_or(0) >= 1);
+    let t0 = Instant::now();
+    let threshold = Duration::from_secs(120);
+    assert!(
+        e.jobs.check_stalls(t0, threshold).is_empty(),
+        "the first look only records the baseline"
+    );
+    assert!(
+        e.jobs
+            .check_stalls(t0 + Duration::from_secs(60), threshold)
+            .is_empty(),
+        "not stalled long enough yet"
+    );
+    let found = e
+        .jobs
+        .check_stalls(t0 + Duration::from_secs(200), threshold);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(
+        found[0].contains("sampling") && found[0].contains("step 1/4"),
+        "the message names the stage and step: {}",
+        found[0]
+    );
+    assert!(
+        e.jobs
+            .check_stalls(t0 + Duration::from_secs(400), threshold)
+            .is_empty(),
+        "reported once per stall"
+    );
+    e.jobs.stop();
+    e.wait_idle();
+    assert!(
+        e.jobs
+            .check_stalls(t0 + Duration::from_secs(600), threshold)
+            .is_empty(),
+        "finished jobs are never reported"
+    );
+}
+
+#[test]
+fn jobs_json_names_the_current_stage() {
+    let e = env(&["一つ目です。"], |s| {
+        s.with_steps(100).with_step_delay(Duration::from_millis(20))
+    });
+    e.submit(None, false, false).unwrap();
+    e.wait_for("sampling", |j| j["stage"] == "sampling");
+    e.jobs.stop();
+    e.wait_idle();
+}

@@ -13,7 +13,7 @@ use crate::audio::load_reference;
 use crate::codec::{Codec, DECODE_CHUNK_FRAMES, DECODE_OVERLAP_FRAMES, ENCODE_CHUNK_FRAMES, ENCODE_OVERLAP_FRAMES};
 use crate::conditioner::{ConditionInputs, Conditioner};
 use crate::config::{ModelConfig, TextEncoderConfig};
-use crate::control::Control;
+use crate::control::{Control, Stage};
 use crate::dit::Dit;
 use crate::duration::DurationPredictor;
 use crate::loader::Weights;
@@ -371,6 +371,7 @@ impl Pipeline {
         let mut mark = std::time::Instant::now();
 
         // 段階 1: 参照音声の encode（codec）
+        req.control.set_stage(Stage::Reference);
         let reference = cfg.use_speaker_condition_resolved().then(|| self.reference(req.ref_wav.as_deref())).transpose()?;
         let has_speaker = req.ref_wav.is_some() && reference.is_some();
         req.control.check()?;
@@ -378,6 +379,7 @@ impl Pipeline {
         mark = std::time::Instant::now();
 
         // 段階 2: 条件エンコードと長さ決定（テキストエンコーダ・speaker・duration）
+        req.control.set_stage(Stage::Conditions);
         let (enc, plan) = {
             let conditioner = self.conditioner()?;
             let enc = conditioner.encode(&ConditionInputs {
@@ -412,6 +414,7 @@ impl Pipeline {
         warnings.extend(clamp_warning(plan.clamped, requested_s, plan.target_samples as f32 / sr as f32, req.min_seconds, req.max_seconds));
 
         // 段階 3: サンプリング（DiT）
+        req.control.set_stage(Stage::Sampling);
         let dim = cfg.patched_latent_dim();
         let noise = match &req.noise {
             Some(n) => {
@@ -438,6 +441,7 @@ impl Pipeline {
         let z = z.narrow(1, 0, plan.latent_steps)?;
 
         // 段階 4: decode（codec）
+        req.control.set_stage(Stage::Decode);
         let rows = z.squeeze(0)?.to_vec2::<f32>()?;
         let flat = find_flattening_point(&rows, req.tail_window.max(1), req.tail_std_threshold, req.tail_mean_threshold);
         let limit = trim_limit(plan.target_samples, flat, hop, req.trim_tail);

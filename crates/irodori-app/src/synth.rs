@@ -24,6 +24,8 @@ pub struct SynthJob {
     pub cancel: Arc<AtomicBool>,
     /// 実行中の候補の完了ステップ数。
     pub progress: Arc<AtomicUsize>,
+    /// いまの段階（`irodori_core::control::Stage` の値）。止まったときにどこかを知るために使う。
+    pub stage: Arc<AtomicUsize>,
 }
 
 impl SynthJob {
@@ -37,6 +39,7 @@ impl SynthJob {
             candidates: 1,
             cancel: Arc::new(AtomicBool::new(false)),
             progress: Arc::new(AtomicUsize::new(0)),
+            stage: Arc::new(AtomicUsize::new(0)),
         }
     }
 }

@@ -12,7 +12,7 @@ use irodori_store::splitter::estimate;
 use irodori_store::{Result, StoreError};
 use serde_json::{json, Value};
 
-use super::{Job, JobManager, Request, SubmitOutcome, Work, BUSY};
+use super::{Job, JobManager, Request, SubmitOutcome, Watch, Work, BUSY};
 use crate::settings_map::{effective_steps, options_from};
 use crate::synth::SynthError;
 
@@ -91,6 +91,8 @@ impl JobManager {
             steps: effective_steps(&options, &requests[0].model),
             cancel: Arc::new(AtomicBool::new(false)),
             progress: Arc::new(AtomicUsize::new(0)),
+            stage: Arc::new(AtomicUsize::new(0)),
+            watch: Watch::new(),
             pending: requests.iter().map(|r| r.card_id.clone()).collect(),
         };
         let work = Work {

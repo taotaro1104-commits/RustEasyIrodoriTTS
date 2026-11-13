@@ -95,13 +95,17 @@ fn mark(
 }
 
 fn run_requests(inner: &Arc<Inner>, job_id: &str, project: &str, requests: &[Request]) {
-    let (cancel, progress) = {
+    let (cancel, progress, stage) = {
         let jobs = inner.jobs();
         let job = jobs
             .iter()
             .find(|j| j.id == job_id)
             .expect("job registered before work is sent");
-        (Arc::clone(&job.cancel), Arc::clone(&job.progress))
+        (
+            Arc::clone(&job.cancel),
+            Arc::clone(&job.progress),
+            Arc::clone(&job.stage),
+        )
     };
     let mut last_error = String::new();
     for request in requests {
@@ -120,6 +124,7 @@ fn run_requests(inner: &Arc<Inner>, job_id: &str, project: &str, requests: &[Req
             candidates: 1,
             cancel: Arc::clone(&cancel),
             progress: Arc::clone(&progress),
+            stage: Arc::clone(&stage),
         };
         let synthesized = catch_unwind(AssertUnwindSafe(|| inner.synth.synthesize(&job)));
         match synthesized {

@@ -134,6 +134,7 @@ impl Synthesizer for RealSynth {
         let control = Control {
             cancel: Some(Arc::clone(&job.cancel)),
             progress: Some(Arc::clone(&job.progress)),
+            stage: Some(Arc::clone(&job.stage)),
         };
         let has_reference = !job.references.is_empty();
         let (mut paths, mut messages, mut first_seed) = (Vec::new(), Vec::new(), None);
