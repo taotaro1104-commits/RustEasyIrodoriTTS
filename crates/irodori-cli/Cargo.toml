@@ -1,0 +1,9 @@
+[package]
+name = "irodori-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+irodori-core = { path = "../irodori-core" }
+anyhow.workspace = true
