@@ -25,6 +25,9 @@ fn main() -> Result<()> {
     let out = pipeline.synthesize(&args.request()).context("synthesis failed")?;
     let synth_secs = t1.elapsed().as_secs_f64();
 
+    for w in &out.warnings {
+        eprintln!("warning: {w}");
+    }
     write_wav(&args.output, &out.samples, out.sample_rate).with_context(|| format!("failed to write {}", args.output.display()))?;
     let audio_secs = out.samples.len() as f64 / out.sample_rate as f64;
     println!("wrote {} ({audio_secs:.2}s, seed {})", args.output.display(), out.seed);

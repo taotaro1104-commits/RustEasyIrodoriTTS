@@ -5,7 +5,6 @@ pub mod loudness;
 use std::fs::File;
 use std::path::Path;
 
-use rubato::{Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction};
 use symphonia::core::audio::SampleBuffer;
 use symphonia::core::codecs::DecoderOptions;
 use symphonia::core::errors::Error as SymError;
@@ -67,37 +66,55 @@ fn decode_file(path: &Path, max_samples: usize) -> Result<(Vec<f32>, u32)> {
     Ok((mono, rate))
 }
 
-/// モノラル波形のリサンプル（窓付き sinc）。出力長は `round(n * to / from)`。
+/// `torchaudio.functional.resample`（`sinc_interp_hann`, lowpass_filter_width=6, rolloff=0.99）と同じ
+/// 窓付き sinc リサンプル。モノラル波形、出力長は `ceil(n * to / from)`。
+///
+/// 周波数比を gcd で約分し、位相ごとのカーネル表（`new` 本 × `2*width + orig` タップ）を作って、
+/// 入力を `orig` サンプルずつ進めながら `new` 個ずつ出力する（上流の conv1d(stride=orig) と同じ計算）。
 pub fn resample_mono(samples: &[f32], from: u32, to: u32) -> Result<Vec<f32>> {
+    if from == 0 || to == 0 {
+        return Err(IrodoriError::Audio(format!("invalid sample rate: {from} -> {to}")));
+    }
     if from == to || samples.is_empty() {
         return Ok(samples.to_vec());
     }
-    let ratio = to as f64 / from as f64;
-    let params = SincInterpolationParameters {
-        sinc_len: 128,
-        f_cutoff: 0.95,
-        interpolation: SincInterpolationType::Linear,
-        oversampling_factor: 128,
-        window: WindowFunction::BlackmanHarris2,
-    };
-    let chunk = 2048;
-    let mut r = SincFixedIn::<f32>::new(ratio, 1.0, params, chunk, 1).map_err(audio_err)?;
-    let delay = r.output_delay();
-    let mut out: Vec<f32> = Vec::with_capacity((samples.len() as f64 * ratio) as usize + chunk);
-    for piece in samples.chunks(chunk) {
-        let res = if piece.len() == chunk {
-            r.process(&[piece], None)
-        } else {
-            r.process_partial(Some(&[piece]), None)
+    const LOWPASS_WIDTH: f64 = 6.0;
+    const ROLLOFF: f64 = 0.99;
+    let g = gcd(from, to);
+    let (orig, new) = ((from / g) as usize, (to / g) as usize);
+    let base = orig.min(new) as f64 * ROLLOFF;
+    let width = (LOWPASS_WIDTH * orig as f64 / base).ceil() as usize;
+    let klen = 2 * width + orig;
+    let scale = base / orig as f64;
+
+    let mut kernels = vec![0f32; new * klen];
+    for p in 0..new {
+        for i in 0..klen {
+            let idx = (i as f64 - width as f64) / orig as f64;
+            let t = ((-(p as f64) / new as f64 + idx) * base).clamp(-LOWPASS_WIDTH, LOWPASS_WIDTH);
+            let window = (t * std::f64::consts::PI / LOWPASS_WIDTH / 2.0).cos().powi(2);
+            let x = t * std::f64::consts::PI;
+            let sinc = if x == 0.0 { 1.0 } else { x.sin() / x };
+            kernels[p * klen + i] = (sinc * window * scale) as f32;
         }
-        .map_err(audio_err)?;
-        out.extend_from_slice(&res[0]);
     }
-    // 内部に残った遅延分を押し出す。
-    out.extend_from_slice(&r.process_partial(None::<&[Vec<f32>]>, None).map_err(audio_err)?[0]);
-    let want = (samples.len() as f64 * ratio).round() as usize;
-    let out: Vec<f32> = out.into_iter().skip(delay).take(want).collect();
+
+    let n = samples.len();
+    let mut padded = vec![0f32; width + n + width + orig];
+    padded[width..width + n].copy_from_slice(samples);
+    let target = (new * n).div_ceil(orig);
+    let mut out = Vec::with_capacity(target);
+    for j in 0..target {
+        let (frame, p) = (j / new, j % new);
+        let window = &padded[frame * orig..frame * orig + klen];
+        let kernel = &kernels[p * klen..(p + 1) * klen];
+        out.push(window.iter().zip(kernel).map(|(x, k)| x * k).sum::<f32>());
+    }
     Ok(out)
+}
+
+fn gcd(a: u32, b: u32) -> u32 {
+    if b == 0 { a } else { gcd(b, a % b) }
 }
 
 /// 参照音声を読み、モノラル化して `target_sr` にリサンプルする。`max_seconds` を超える分は捨てる。
@@ -155,6 +172,38 @@ mod tests {
         let out = load_reference(&p, 48000, 120.0).unwrap();
         let want = 48000i64;
         assert!((out.len() as i64 - want).abs() <= 2, "{}", out.len());
+    }
+
+    /// 理想的にリサンプルした正弦波との最大誤差（両端の過渡部分は除く）。
+    fn resample_error(from: u32, to: u32, freq: f32) -> f32 {
+        let secs = 1.0f32;
+        let src: Vec<f32> = (0..(from as f32 * secs) as usize).map(|i| (2.0 * std::f32::consts::PI * freq * i as f32 / from as f32).sin()).collect();
+        let out = resample_mono(&src, from, to).unwrap();
+        assert_eq!(out.len(), (to as f32 * secs) as usize);
+        let margin = 400;
+        (margin..out.len() - margin)
+            .map(|i| (out[i] - (2.0 * std::f32::consts::PI * freq * i as f32 / to as f32).sin()).abs())
+            .fold(0f32, f32::max)
+    }
+
+    #[test]
+    fn upsampling_keeps_the_waveform_time_aligned() {
+        // 位相が遅れ/進みすると正弦波との誤差が大きくなる（過去の実装は遅延補正を二重にかけて 100 サンプル級にずれた）。
+        let err = resample_error(24000, 48000, 440.0);
+        assert!(err < 0.02, "max error vs ideal sine {err}");
+    }
+
+    #[test]
+    fn downsampling_keeps_the_waveform_time_aligned() {
+        let err = resample_error(48000, 16000, 440.0);
+        assert!(err < 0.02, "max error vs ideal sine {err}");
+    }
+
+    #[test]
+    fn invalid_sample_rates_are_rejected() {
+        assert!(resample_mono(&[0.1, 0.2], 0, 48000).is_err());
+        assert!(resample_mono(&[0.1, 0.2], 48000, 0).is_err());
+        assert_eq!(resample_mono(&[0.1, 0.2], 48000, 48000).unwrap(), vec![0.1, 0.2]);
     }
 
     #[test]

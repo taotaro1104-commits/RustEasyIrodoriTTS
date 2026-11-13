@@ -367,7 +367,11 @@ pub(crate) mod tests {
         let enc = cond
             .encode(&ConditionInputs { text_ids: &tid, text_mask: &tm, caption_ids: Some(&cid), caption_mask: Some(&cm), ref_latent: Some(&g["ref_latent"]), ref_mask: Some(&rm) })
             .unwrap();
-        let close = |a: &Tensor, k: &str| crate::golden::assert_close(a, &g[k], 2e-3, 2e-3).unwrap_or_else(|e| panic!("{k}: {e}"));
+        let close = |a: &Tensor, k: &str| {
+            let d = (a.to_dtype(DType::F32).unwrap() - &g[k]).unwrap().abs().unwrap().flatten_all().unwrap().max(0).unwrap().to_scalar::<f32>().unwrap();
+            eprintln!("{k}: max abs diff {d:.2e}");
+            crate::golden::assert_close(a, &g[k], 2e-3, 2e-3).unwrap_or_else(|e| panic!("{k}: {e}"))
+        };
         close(&enc.text, "text_state");
         let (ss, sm) = enc.speaker.clone().unwrap();
         close(&ss, "speaker_state");

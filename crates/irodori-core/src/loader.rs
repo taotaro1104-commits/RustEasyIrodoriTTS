@@ -87,17 +87,20 @@ fn read_header(path: &Path) -> Result<Header> {
         let dtype = parse_dtype(&dtype_str).ok_or_else(|| bad(format!("tensor {name} has unsupported dtype {dtype_str}")))?;
         let shape: Vec<usize> = field("shape")?
             .as_array()
-            .map(|a| a.iter().filter_map(|x| x.as_u64().map(|x| x as usize)).collect())
+            .and_then(|a| a.iter().map(|x| x.as_u64().and_then(|x| usize::try_from(x).ok())).collect())
             .ok_or_else(|| bad(format!("tensor {name} has an invalid shape")))?;
         let off = field("data_offsets")?.as_array().cloned().unwrap_or_default();
         let (start, end) = match (off.first().and_then(|x| x.as_u64()), off.get(1).and_then(|x| x.as_u64())) {
             (Some(s), Some(e)) if s <= e => (s, e),
             _ => return Err(bad(format!("tensor {name} has invalid data_offsets"))),
         };
-        if data_start + end > file_len {
+        if data_start.checked_add(end).map_or(true, |e| e > file_len) {
             return Err(bad(format!("tensor {name} extends past the end of the file (truncated?)")));
         }
-        let want = shape.iter().product::<usize>() as u64 * dtype.size_in_bytes() as u64;
+        let want = shape
+            .iter()
+            .try_fold(dtype.size_in_bytes() as u64, |acc, &d| acc.checked_mul(d as u64))
+            .ok_or_else(|| bad(format!("tensor {name} has an overflowing shape")))?;
         if end - start != want {
             return Err(bad(format!("tensor {name}: {} bytes in header range, expected {want}", end - start)));
         }
@@ -298,5 +301,40 @@ mod tests {
         let w = Weights::open(&write_file(dir.path(), None), &Device::Cpu).unwrap();
         let t = w.var_builder(DType::F32).unwrap().pp("block").get((2, 2), "w").unwrap();
         assert_eq!(t.to_vec2::<f32>().unwrap(), vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    }
+
+    fn file_with_raw_header(dir: &std::path::Path, header: &str, data: &[u8]) -> std::path::PathBuf {
+        let path = dir.join("raw.safetensors");
+        let mut bytes = (header.len() as u64).to_le_bytes().to_vec();
+        bytes.extend_from_slice(header.as_bytes());
+        bytes.extend_from_slice(data);
+        std::fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    #[test]
+    fn overflowing_shape_product_is_rejected_not_wrapped() {
+        // 4611686018427387905 * 4 は u64 で 4 に巻き戻る。巻き戻りを通すと巨大確保で落ちる。
+        let dir = tempfile::tempdir().unwrap();
+        let h = r#"{"w":{"dtype":"F32","shape":[4611686018427387905],"data_offsets":[0,4]}}"#;
+        let p = file_with_raw_header(dir.path(), h, &[0, 0, 0, 0]);
+        assert!(Weights::open(&p, &Device::Cpu).is_err());
+    }
+
+    #[test]
+    fn overflowing_data_offsets_are_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let h = r#"{"w":{"dtype":"U8","shape":[1],"data_offsets":[0,18446744073709551615]}}"#;
+        let p = file_with_raw_header(dir.path(), h, &[0]);
+        assert!(Weights::open(&p, &Device::Cpu).is_err());
+    }
+
+    #[test]
+    fn non_integer_shape_entries_are_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let h = r#"{"w":{"dtype":"U8","shape":["a"],"data_offsets":[0,1]}}"#;
+        let p = file_with_raw_header(dir.path(), h, &[0]);
+        let err = Weights::open(&p, &Device::Cpu).err().expect("must fail").to_string();
+        assert!(err.contains("shape"), "{err}");
     }
 }

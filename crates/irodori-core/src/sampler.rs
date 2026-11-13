@@ -117,7 +117,7 @@ pub fn initial_noise(seed: u64, batch: usize, len: usize, dim: usize, device: &D
     Ok(Tensor::from_vec(normal_vec(seed, batch * len * dim), (batch, len, dim), device)?)
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum Kind {
     Text,
     Speaker,
@@ -175,24 +175,37 @@ fn velocity(dit: &Dit, x: &Tensor, tt: &Tensor, c: &EncodedConditions, cache: &C
     dit.forward_with_encoded_conditions(x, tt, c, None, Some(cache))
 }
 
-/// RF の Euler サンプリング。`noise: (B, T, patched_latent_dim)`。戻り値は同形のパッチ化済み潜在。
-pub fn sample_euler_cfg(dit: &Dit, cond: &EncodedConditions, p: &SamplerParams, noise: &Tensor) -> Result<Tensor> {
-    let ts = t_schedule(p.num_steps, p.schedule, p.sway_coeff)?;
-    let has_speaker = cond.speaker.is_some();
-    let has_caption = match &cond.caption {
-        Some((_, m)) => any_valid(m)?,
-        None => false,
+/// ガイダンスを掛ける項目（順序は text, speaker, caption）。speaker / caption は**有効なトークンが
+/// 1 つでもあるとき**だけ。参照なし（全マスク）の speaker に無条件分岐を走らせても差分は 0 で、
+/// forward が無駄になる（上流 `resolve_cfg_scales` も参照なしでは speaker のスケールを 0 にする）。
+fn enabled_guidance(cond: &EncodedConditions, p: &SamplerParams) -> Result<Vec<(Kind, f32)>> {
+    let valid = |c: &Option<(Tensor, Tensor)>| -> Result<bool> {
+        match c {
+            Some((_, m)) => any_valid(m),
+            None => Ok(false),
+        }
     };
     let mut enabled: Vec<(Kind, f32)> = Vec::new();
     if p.cfg_text > 0.0 {
         enabled.push((Kind::Text, p.cfg_text));
     }
-    if p.cfg_speaker > 0.0 && has_speaker {
+    if p.cfg_speaker > 0.0 && valid(&cond.speaker)? {
         enabled.push((Kind::Speaker, p.cfg_speaker));
     }
-    if p.cfg_caption > 0.0 && has_caption {
+    if p.cfg_caption > 0.0 && valid(&cond.caption)? {
         enabled.push((Kind::Caption, p.cfg_caption));
     }
+    Ok(enabled)
+}
+
+/// RF の Euler サンプリング。`noise: (B, T, patched_latent_dim)`。戻り値は同形のパッチ化済み潜在。
+pub fn sample_euler_cfg(dit: &Dit, cond: &EncodedConditions, p: &SamplerParams, noise: &Tensor) -> Result<Tensor> {
+    let ts = t_schedule(p.num_steps, p.schedule, p.sway_coeff)?;
+    let has_speaker = match &cond.speaker {
+        Some((_, m)) => any_valid(m)?,
+        None => false,
+    };
+    let enabled = enabled_guidance(cond, p)?;
     if p.guidance == GuidanceMode::Joint && enabled.len() > 1 {
         let (lo, hi) = enabled.iter().fold((f32::MAX, f32::MIN), |(lo, hi), (_, s)| (lo.min(*s), hi.max(*s)));
         if hi - lo > 1e-6 {
@@ -408,5 +421,14 @@ mod tests {
         let a = initial_noise(5, 1, 7, 3, &Device::Cpu).unwrap();
         assert_eq!(a.dims(), &[1, 7, 3]);
         assert_close(&a, &initial_noise(5, 1, 7, 3, &Device::Cpu).unwrap(), 0.0, 0.0).unwrap();
+    }
+
+    #[test]
+    fn all_masked_speaker_does_not_enable_speaker_guidance() {
+        let mut c = conds("txt");
+        c.speaker = Some((fake_tensor("spk", &[1, 3, 6]), mask(&[0, 0, 0])));
+        let kinds = enabled_guidance(&c, &quick(2)).unwrap();
+        assert!(kinds.iter().all(|(k, _)| *k != Kind::Speaker), "no-reference run must not pay for a speaker branch");
+        assert!(enabled_guidance(&conds("txt"), &quick(2)).unwrap().iter().any(|(k, _)| *k == Kind::Speaker));
     }
 }

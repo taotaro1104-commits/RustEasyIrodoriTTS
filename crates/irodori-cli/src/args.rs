@@ -6,6 +6,9 @@ use candle_core::DType;
 use clap::{Parser, ValueEnum};
 use irodori_core::pipeline::{MemoryMode, PipelineOptions, SynthRequest};
 
+/// 長さの上限の既定値（秒）。上流の既定と同じ。
+const DEFAULT_MAX_SECONDS: f32 = 30.0;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum DtypeArg {
     F32,
@@ -55,6 +58,10 @@ pub struct Args {
     #[arg(long)]
     pub seconds: Option<f32>,
 
+    /// 長さの上限（秒、既定 30）。長いテキストはこれを上げないと途中で詰まる／切れる。
+    #[arg(long)]
+    pub max_seconds: Option<f32>,
+
     /// 重みの精度。bf16 はメモリ半分（潜在の相対誤差は約 4%）。
     #[arg(long, value_enum, default_value = "f32")]
     pub dtype: DtypeArg,
@@ -93,6 +100,7 @@ impl Args {
             ref_wav: self.voice.clone(),
             seed: self.seed,
             seconds: self.seconds,
+            max_seconds: self.max_seconds.unwrap_or(DEFAULT_MAX_SECONDS),
             num_steps: self.steps,
             ..SynthRequest::default()
         }
@@ -146,6 +154,12 @@ mod tests {
         assert_eq!(o.dtype, candle_core::DType::BF16);
         assert_eq!(o.codec_dtype, candle_core::DType::F32, "codec stays f32");
         assert_eq!(o.memory, MemoryMode::Staged);
+    }
+
+    #[test]
+    fn max_seconds_option_raises_the_length_limit() {
+        assert_eq!(parse(&["x"]).unwrap().request().max_seconds, 30.0, "default limit");
+        assert_eq!(parse(&["x", "--max-seconds", "60"]).unwrap().request().max_seconds, 60.0);
     }
 
     #[test]

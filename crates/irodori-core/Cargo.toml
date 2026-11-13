@@ -15,7 +15,6 @@ regex.workspace = true
 unicode-normalization.workspace = true
 tokenizers.workspace = true
 symphonia.workspace = true
-rubato.workspace = true
 hound.workspace = true
 bytemuck = "1"
 
