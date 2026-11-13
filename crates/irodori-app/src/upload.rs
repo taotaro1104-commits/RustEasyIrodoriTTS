@@ -32,6 +32,13 @@ const PICK_MESSAGE: &str = "音声ファイルを選んでください。";
 const UNREADABLE_MESSAGE: &str = "音声を読み込めません。形式を確認してください。";
 const LENGTH_MESSAGE: &str = "音声は1～120秒にしてください。";
 const SIZE_MESSAGE: &str = "音声は100MB以内にしてください。";
+const OPUS_MESSAGE: &str =
+    "未対応です（Opus 形式の ogg は読み込めません。wav / mp3 / flac / Vorbis の ogg / m4a / mp4 を使ってください）。";
+/// 取り込める元のサンプルレートの範囲。範囲外はヘッダの異常として読み込めないことにする。
+const MIN_SOURCE_RATE: u32 = 1_000;
+const MAX_SOURCE_RATE: u32 = 384_000;
+/// リサンプルのカーネル表の大きさの上限（要素数。f32 で 64 MB）。
+const MAX_KERNEL_ENTRIES: u64 = 16_000_000;
 const WEBM_MESSAGE: &str =
     "未対応です（.webm は読み込めません。wav / mp3 / flac / ogg / m4a / mp4 を使ってください）。";
 
@@ -102,16 +109,64 @@ pub fn normalize(original: &Path, out: &Path) -> Result<f64, StoreError> {
         tracing::info!("upload could not be decoded: {e}");
         invalid(UNREADABLE_MESSAGE)
     })?;
+    if !(MIN_SOURCE_RATE..=MAX_SOURCE_RATE).contains(&rate) {
+        return Err(invalid(UNREADABLE_MESSAGE));
+    }
     let seconds = samples.len() as f64 / f64::from(rate);
     if !(MIN_SECONDS..=MAX_SECONDS).contains(&seconds) {
         return Err(invalid(LENGTH_MESSAGE));
     }
-    let resampled = resample_mono(&samples, rate, TARGET_RATE).map_err(|e| {
+    let resampled = resample_mono(&samples, bounded_rate(rate), TARGET_RATE).map_err(|e| {
         tracing::info!("upload could not be resampled: {e}");
         invalid(UNREADABLE_MESSAGE)
     })?;
     write_wav(out, &resampled, TARGET_RATE).map_err(|e| StoreError::Internal(e.to_string()))?;
     Ok(seconds)
+}
+
+fn gcd(a: u64, b: u64) -> u64 {
+    if b == 0 {
+        a
+    } else {
+        gcd(b, a % b)
+    }
+}
+
+/// リサンプルのカーネル表の要素数（`irodori_core::audio::resample_mono` と同じ計算）。
+fn kernel_entries(rate: u32) -> u64 {
+    let target = u64::from(TARGET_RATE);
+    let g = gcd(u64::from(rate), target);
+    let (orig, new) = (u64::from(rate) / g, target / g);
+    let base = (orig.min(new) as f64) * 0.99;
+    let width = (6.0 * orig as f64 / base).ceil() as u64;
+    new * (2 * width + orig)
+}
+
+/// リサンプルのカーネル表が大きくなりすぎるレート（24000 Hz と互いに素に近い 44101 Hz など）は、
+/// 10 Hz・100 Hz・1000 Hz 単位の順に、表が収まるまで丸める（ずれは 0.2% 未満で、聞き分けられない）。
+/// 普通のレート（44100・48000 など）はそのまま。
+fn bounded_rate(rate: u32) -> u32 {
+    if kernel_entries(rate) <= MAX_KERNEL_ENTRIES {
+        return rate;
+    }
+    for step in [10u32, 100, 1000] {
+        let rounded = ((rate + step / 2) / step * step).max(step);
+        if kernel_entries(rounded) <= MAX_KERNEL_ENTRIES {
+            return rounded;
+        }
+    }
+    1000
+}
+
+/// ogg の先頭に `OpusHead` があれば Opus（この版では読めない）。
+fn is_opus(path: &Path) -> bool {
+    use std::io::Read;
+    let mut head = vec![0u8; 512];
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let n = file.read(&mut head).unwrap_or(0);
+    head[..n].windows(8).any(|w| w == b"OpusHead")
 }
 
 /// ファイル名の拡張子（小文字、ドット無し）。区切り文字を含むものは拡張子と認めない。
@@ -157,6 +212,9 @@ pub async fn upload(
         let normalized = folder.join(format!("{id}.normalized.wav"));
         let mut cleanup = Cleanup(vec![original.clone(), normalized.clone()]);
         receive(&mut field, &original, MAX_UPLOAD_BYTES).await?;
+        if original.extension().is_some_and(|e| e == "ogg") && is_opus(&original) {
+            return Ok(not_implemented(OPUS_MESSAGE));
+        }
         let (source, target) = (original.clone(), normalized.clone());
         let seconds = tokio::task::spawn_blocking(move || normalize(&source, &target))
             .await
@@ -222,6 +280,66 @@ mod tests {
             "{}",
             r.duration()
         );
+    }
+
+    /// 24000 Hz と互いに素に近いレートでも、時間もメモリも暴れずに取り込める。
+    #[test]
+    fn odd_sample_rates_are_normalized_quickly() {
+        let dir = tempfile::tempdir().unwrap();
+        let (src, out) = (dir.path().join("a.wav"), dir.path().join("o.wav"));
+        for rate in [3001u32, 44101, 22051, 11025, 96000] {
+            write_tone(&src, rate, 2.0);
+            let started = std::time::Instant::now();
+            let seconds = normalize(&src, &out).unwrap();
+            assert!((seconds - 2.0).abs() < 0.01, "{rate}: {seconds}");
+            let r = hound::WavReader::open(&out).unwrap();
+            assert!(
+                (r.duration() as f64 - 48000.0).abs() <= 100.0,
+                "{rate}: {}",
+                r.duration()
+            );
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(2),
+                "{rate} took {:?}",
+                started.elapsed()
+            );
+        }
+    }
+
+    #[test]
+    fn absurd_sample_rates_are_unreadable_not_a_crash() {
+        let dir = tempfile::tempdir().unwrap();
+        let (src, out) = (dir.path().join("a.wav"), dir.path().join("o.wav"));
+        for rate in [100u32, 500_000, 90_000_000] {
+            // 16bit モノラルの WAV を、ヘッダのレートだけ変えて作る。
+            let spec = hound::WavSpec {
+                channels: 1,
+                sample_rate: rate,
+                bits_per_sample: 16,
+                sample_format: hound::SampleFormat::Int,
+            };
+            let mut w = hound::WavWriter::create(&src, spec).unwrap();
+            for i in 0..2000 {
+                w.write_sample(((i % 100) as i16) * 100).unwrap();
+            }
+            w.finalize().unwrap();
+            let e = normalize(&src, &out).unwrap_err();
+            assert_eq!(e.message(), UNREADABLE_MESSAGE, "{rate}");
+        }
+    }
+
+    #[test]
+    fn opus_in_ogg_is_recognized_from_the_first_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("o.ogg");
+        let mut bytes = b"OggS\x00\x02".to_vec();
+        bytes.extend_from_slice(&[0u8; 20]);
+        bytes.extend_from_slice(b"OpusHead\x01\x01");
+        std::fs::write(&p, &bytes).unwrap();
+        assert!(is_opus(&p));
+        std::fs::write(&p, b"OggS\x00\x02....vorbis....").unwrap();
+        assert!(!is_opus(&p));
+        assert!(!is_opus(&dir.path().join("missing.ogg")));
     }
 
     #[test]

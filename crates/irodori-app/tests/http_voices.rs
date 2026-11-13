@@ -120,6 +120,19 @@ async fn upload_rejects_garbage_with_a_wav_extension() {
 }
 
 #[tokio::test]
+async fn upload_of_opus_in_ogg_is_501_with_a_specific_message() {
+    let f = fixture();
+    let mut bytes = b"OggS\x00\x02".to_vec();
+    bytes.extend_from_slice(&[0u8; 20]);
+    bytes.extend_from_slice(b"OpusHead\x01\x01");
+    bytes.extend_from_slice(&[0u8; 200]);
+    let r = upload(&f, "note.ogg", &bytes).await;
+    assert_eq!(r.status, StatusCode::NOT_IMPLEMENTED);
+    assert!(r.error().contains("Opus"), "{}", r.error());
+    assert!(leftovers(&f).is_empty(), "{:?}", leftovers(&f));
+}
+
+#[tokio::test]
 async fn upload_rejects_empty_file() {
     let f = fixture();
     let r = upload(&f, "a.wav", b"").await;

@@ -12,7 +12,7 @@
 | `irodori-core` | 推論コア（Candle の CPU 実装。正規化・トークナイザ・ModernBERT・DiT・DACVAE・サンプラ・音声処理） | M1 完了。Python 版と数値一致（`docs/bench.md`） |
 | `irodori-cli` | テキスト→WAV のコマンド | M1 完了 |
 | `irodori-store` | v2.0 互換の保存層（台本・話者・設定・辞書・分割・署名・編集操作・状態） | M2a 完了。M2b-2: 話者の登録・名前変更・削除 |
-| `irodori-app` | ローカルサーバ＋画面（v2.0 の editor を埋め込み） | M2a: 編集・辞書・設定・クレジット。M2b-1: 音声の生成・停止・進捗。M2b-2: 音声の取り込み（wav / mp3 / flac / ogg / m4a / mp4。`.webm` は未対応）・話者の登録／名前変更／削除・声の試作（ボイスデザイン）。モデルの自動取得は M2b-3、書き出しは M2c |
+| `irodori-app` | ローカルサーバ＋画面（v2.0 の editor を埋め込み） | M2a: 編集・辞書・設定・クレジット。M2b-1: 音声の生成・停止・進捗。M2b-2: 音声の取り込み（wav / mp3 / flac / Vorbis の ogg / m4a / mp4。`.webm` と Opus の ogg は未対応）・話者の登録／名前変更／削除・声の試作（ボイスデザイン）。モデルの自動取得は M2b-3、書き出しは M2c |
 
 ## 起動
 ```powershell
