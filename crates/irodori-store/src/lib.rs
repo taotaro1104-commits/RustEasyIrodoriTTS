@@ -6,6 +6,7 @@ pub mod generation;
 pub mod history;
 pub mod model;
 pub mod naming;
+pub mod ops;
 pub mod py_json;
 pub mod signature;
 pub mod splitter;

@@ -21,7 +21,7 @@ fn file(root: &Path) -> PathBuf {
 }
 
 /// Python の `str.strip()` と同じ空白判定で前後を削る。
-fn py_strip(s: &str) -> &str {
+pub(crate) fn py_strip(s: &str) -> &str {
     s.trim_matches(|c| in_table(PY_SPACE, c))
 }
 

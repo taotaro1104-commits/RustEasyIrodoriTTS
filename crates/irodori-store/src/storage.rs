@@ -283,6 +283,13 @@ impl Store {
         Ok(doc)
     }
 
+    /// 最後に開いた台本を覚える（設定ファイルだけ書き換える）。
+    pub fn set_last_project(&self, pid: &str) -> Result<()> {
+        let mut inner = self.lock();
+        inner.settings.last_project = pid.to_string();
+        inner.write_settings()
+    }
+
     pub fn list_projects(&self) -> Vec<ProjectSummary> {
         let dir = self.root.join("projects");
         let mut paths: Vec<PathBuf> = match std::fs::read_dir(&dir) {

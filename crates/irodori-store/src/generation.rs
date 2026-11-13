@@ -31,7 +31,14 @@ pub fn default_generation() -> Generation {
 }
 
 /// 範囲つき数値。範囲外・非数・非有限は `"{label}は{min}～{max}で指定してください。"`。
-fn number(v: &Value, min: f64, max: f64, label: &str, min_s: &str, max_s: &str) -> Result<f64> {
+pub(crate) fn number(
+    v: &Value,
+    min: f64,
+    max: f64,
+    label: &str,
+    min_s: &str,
+    max_s: &str,
+) -> Result<f64> {
     let x = match v {
         Value::Number(n) => n.as_f64(),
         Value::String(s) => s.trim().parse::<f64>().ok(),

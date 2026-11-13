@@ -86,7 +86,7 @@ pub fn result_matches(
             == Some(&Value::String(reading_text(doc, card, dict)))
 }
 
-fn is_falsy(v: &Value) -> bool {
+pub(crate) fn is_falsy(v: &Value) -> bool {
     match v {
         Value::Null => true,
         Value::Bool(b) => !b,
