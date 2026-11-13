@@ -34,6 +34,18 @@ pub struct Args {
     /// ブラウザを自動で開かない
     #[arg(long)]
     pub no_browser: bool,
+    /// モデルを探すフォルダ（HF キャッシュ互換。既定は `<data-dir>/models/huggingface/hub` で、v2.0 のものをそのまま使える）
+    #[arg(long)]
+    pub models_dir: Option<PathBuf>,
+}
+
+impl Args {
+    /// モデルを探すフォルダ。
+    pub fn hub_dir(&self) -> PathBuf {
+        self.models_dir
+            .clone()
+            .unwrap_or_else(|| self.data_dir.join("models").join("huggingface").join("hub"))
+    }
 }
 
 pub fn default_data_dir() -> PathBuf {
@@ -207,6 +219,26 @@ mod tests {
         let args = Args::parse_from(["irodori-app"]);
         assert_eq!((args.port, args.no_browser), (7860, false));
         assert_eq!(args.data_dir, default_data_dir());
+        assert_eq!(
+            args.hub_dir(),
+            default_data_dir()
+                .join("models")
+                .join("huggingface")
+                .join("hub")
+        );
+        let args = Args::parse_from(["irodori-app", "--data-dir", "D", "--models-dir", "M"]);
+        assert_eq!(
+            (args.hub_dir(), args.data_dir),
+            (PathBuf::from("M"), PathBuf::from("D"))
+        );
+        let args = Args::parse_from(["irodori-app", "--data-dir", "D"]);
+        assert_eq!(
+            args.hub_dir(),
+            PathBuf::from("D")
+                .join("models")
+                .join("huggingface")
+                .join("hub")
+        );
         let args = Args::parse_from([
             "irodori-app",
             "--port",

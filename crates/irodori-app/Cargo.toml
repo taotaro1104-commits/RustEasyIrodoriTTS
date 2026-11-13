@@ -7,6 +7,7 @@ license.workspace = true
 [dependencies]
 irodori-store = { path = "../irodori-store" }
 irodori-core = { path = "../irodori-core" }
+candle-core.workspace = true
 axum.workspace = true
 tokio.workspace = true
 serde.workspace = true

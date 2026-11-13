@@ -6,6 +6,8 @@ pub mod fake;
 pub mod launch;
 pub mod logging;
 pub mod meta;
+pub mod models;
+pub mod real_synth;
 pub mod routes;
 pub mod security;
 pub mod settings_map;
