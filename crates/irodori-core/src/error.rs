@@ -11,6 +11,8 @@ pub enum IrodoriError {
     Json(#[from] serde_json::Error),
     #[error("missing safetensors metadata entry: {0}")]
     MissingMetadata(String),
+    #[error("missing tensor in checkpoint: {0}")]
+    MissingKey(String),
     #[error("invalid safetensors file: {0}")]
     InvalidFile(String),
     #[error("invalid config: {0}")]
