@@ -26,6 +26,17 @@ fn audio_err(e: impl std::fmt::Display) -> IrodoriError {
 
 /// 音声ファイルをデコードしてモノラル（チャンネル平均）にする。`max_samples` に達したら打ち切る。
 fn decode_file(path: &Path, max_samples: usize) -> Result<(Vec<f32>, u32)> {
+    decode_until(path, |_| max_samples)
+}
+
+/// 音声ファイルをモノラル（チャンネル平均）にデコードする。そのファイルの実レートで `max_seconds` 分に達したら打ち切る。
+/// 戻り値は（`max_seconds` 以内のサンプル, 元のレート）。
+pub fn decode_mono(path: &Path, max_seconds: f32) -> Result<(Vec<f32>, u32)> {
+    decode_until(path, |rate| (max_seconds * rate as f32) as usize)
+}
+
+/// `limit(元のレート)` サンプルに達するまでデコードする。
+fn decode_until(path: &Path, limit: impl Fn(u32) -> usize) -> Result<(Vec<f32>, u32)> {
     let file = File::open(path)?;
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = Hint::new();
@@ -40,6 +51,7 @@ fn decode_file(path: &Path, max_samples: usize) -> Result<(Vec<f32>, u32)> {
     let (track_id, rate) = (track.id, track.codec_params.sample_rate.ok_or_else(|| audio_err("unknown sample rate"))?);
     let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, &DecoderOptions::default()).map_err(audio_err)?;
 
+    let max_samples = limit(rate);
     let mut mono: Vec<f32> = Vec::new();
     while mono.len() < max_samples {
         let packet = match format.next_packet() {
