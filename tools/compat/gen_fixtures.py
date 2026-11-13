@@ -282,11 +282,86 @@ def _matches(service, project, card, dictionary, result) -> bool:
     return bool(service.result_matches(project, card, dictionary))
 
 
+def make_data_dir(root: Path) -> None:
+    """Task 13: v2.0 の `Store` で、実データ形式のデータフォルダ（複数台本・話者・辞書・設定・生成結果つきカード）を作る。
+
+    `compat_expected.json` に、Rust 側のテストが突き合わせる期待値（Python が計算した署名など）を書く。
+    """
+    import copy
+    import json
+    from easy_service import Service
+    from easy_storage import Store, atomic_json, new_card, new_project
+
+    if root.exists() and any(root.iterdir()):
+        raise SystemExit(f"{root} is not empty")
+    root.mkdir(parents=True, exist_ok=True)
+    store = Store(root)
+
+    voices = voices_sample()
+    for voice in voices:
+        wav = root / voice["audio"]
+        wav.parent.mkdir(parents=True, exist_ok=True)
+        wav.write_bytes(b"RIFF\0\0\0\0WAVE")
+    atomic_json(root / "voices" / "index.json", voices)
+    store.voices = copy.deepcopy(voices)
+
+    dictionary = {"Irodori": "いろどり", "日本橋": "にほんばし"}
+    (root / "config").mkdir(parents=True, exist_ok=True)
+    (root / "config" / "reading_dictionary.json").write_text(json.dumps(dictionary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    service = Service.__new__(Service)
+    service.store = store
+
+    other = new_project("台本B")
+    other["cards"][0]["text"] = "別の台本"
+    store.persist(other)
+
+    project = project_sample()
+    first, second = project["cards"]
+    second["voice_id"] = ""  # 話者が消えた（missing_voice_name だけが残る）カード
+    third = new_card(first)
+    third.update(id="d" * 32, text="Irodori は 日本橋 で", status="生成中")
+    third["future_card_field"] = {"nested": [1, 2.5, None]}
+    project["cards"].append(third)
+    fourth = new_card(first)
+    fourth.update(id="e" * 32, text="Irodori の結果", status="完了", filename="04", result=dict(seed=1, record="r1"))
+    project["cards"].append(fourth)
+    results = []
+    for card, name in ((first, "01"), (fourth, "04")):
+        rel = f"outputs/internal/r1/{name}.wav"
+        wav = root / rel
+        wav.parent.mkdir(parents=True, exist_ok=True)
+        wav.write_bytes(b"RIFF\0\0\0\0WAVE")
+        card["result"]["path"] = rel
+        card["result"]["signature"] = service.signature(project, card, dictionary)
+        results.append(dict(card_id=card["id"], signature=card["result"]["signature"]))
+    store.persist(other)
+    store.persist(project)  # 最後に開いた台本にする
+    store.save_settings(dict(theme="dark", custom_pattern=True, pattern="$連番$-$テキスト$"))
+    settings_path = root / "config" / "settings.json"
+    settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    settings["future_setting"] = "x"
+    atomic_json(settings_path, settings)
+
+    expected = dict(
+        project_id=project["id"], other_project_id=other["id"], dictionary=dictionary, results=results,
+        busy_card_id=third["id"], missing_voice_card_id=second["id"], selected=project["selected"],
+    )
+    (root / "compat_expected.json").write_text(json.dumps(expected, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"wrote data folder {root} ({len(project['cards'])} cards, {len(results)} results)")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--out", type=Path)
+    parser.add_argument("--make-data-dir", type=Path, help="Task 13: v2.0 の Store で実データのフォルダを作る")
     parser.add_argument("--only", nargs="*")
     args = parser.parse_args()
+    if args.make_data_dir:
+        make_data_dir(args.make_data_dir)
+        return
+    if not args.out:
+        parser.error("--out か --make-data-dir が必要です")
     args.out.mkdir(parents=True, exist_ok=True)
     names = args.only or sorted(FIXTURES)
     unknown = [n for n in names if n not in FIXTURES]
