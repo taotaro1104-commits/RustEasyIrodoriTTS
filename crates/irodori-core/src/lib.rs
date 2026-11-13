@@ -4,6 +4,7 @@ pub mod attention;
 pub mod conditioner;
 pub mod config;
 pub mod dit;
+pub mod duration;
 pub mod golden;
 pub mod joint_attention;
 pub mod loader;
