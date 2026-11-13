@@ -47,6 +47,8 @@ impl DiffusionBlock {
 
 pub struct Dit {
     cond: [Linear; 3],
+    /// MeanFlow の `delta_t`（区間幅）用の条件 MLP。RF モデルでは `None`。
+    delta_cond: Option<[Linear; 3]>,
     in_proj: Linear,
     blocks: Vec<DiffusionBlock>,
     out_norm: RmsNorm,
@@ -64,12 +66,26 @@ impl Dit {
         let blocks = (0..cfg.num_layers)
             .map(|i| DiffusionBlock::load(cfg, vb.pp(format!("blocks.{i}"))))
             .collect::<Result<Vec<_>>>()?;
+        let mlp3 = |vb: &VarBuilder| -> Result<[Linear; 3]> {
+            Ok([
+                linear_no_bias(cfg.timestep_embed_dim, d, vb.pp("0"))?,
+                linear_no_bias(d, d, vb.pp("2"))?,
+                linear_no_bias(d, d * 3, vb.pp("4"))?,
+            ])
+        };
+        let flow = cfg.flow_parameterization.trim().to_ascii_lowercase();
+        let delta_cond = match flow.as_str() {
+            "rf_velocity" => None,
+            "meanflow" => Some(mlp3(&vb.pp("delta_cond_module"))?),
+            other => {
+                return Err(IrodoriError::InvalidConfig(format!(
+                    "flow_parameterization must be 'rf_velocity' or 'meanflow', got {other:?}"
+                )))
+            }
+        };
         Ok(Self {
-            cond: [
-                linear_no_bias(cfg.timestep_embed_dim, d, c.pp("0"))?,
-                linear_no_bias(d, d, c.pp("2"))?,
-                linear_no_bias(d, d * 3, c.pp("4"))?,
-            ],
+            cond: mlp3(&c)?,
+            delta_cond,
             in_proj: linear(cfg.patched_latent_dim(), d, vb.pp("in_proj"))?,
             blocks,
             out_norm: RmsNorm::new(&[d], cfg.norm_eps, vb.pp("out_norm"))?,
@@ -91,18 +107,55 @@ impl Dit {
             .collect()
     }
 
-    fn time_cond(&self, t: &Tensor, dtype: candle_core::DType) -> Result<Tensor> {
+    fn cond_mlp(&self, mlp: &[Linear; 3], t: &Tensor, dtype: candle_core::DType) -> Result<Tensor> {
         let e = timestep_embedding(t, self.timestep_dim)?.to_dtype(dtype)?;
-        let h = candle_nn::ops::silu(&self.cond[0].forward(&e)?)?;
-        let h = candle_nn::ops::silu(&self.cond[1].forward(&h)?)?;
-        Ok(self.cond[2].forward(&h)?.unsqueeze(1)?)
+        let h = candle_nn::ops::silu(&mlp[0].forward(&e)?)?;
+        let h = candle_nn::ops::silu(&mlp[1].forward(&h)?)?;
+        Ok(mlp[2].forward(&h)?)
     }
 
-    /// `x_t: (B, T, patched_latent_dim)`, `t: (B,)` → 速度 `(B, T, patched_latent_dim)`。
+    /// `(B, 1, 3*model_dim)`。MeanFlow では区間幅 `delta_t` の条件を足す（RF では `delta_t` を渡せない）。
+    fn time_cond(&self, t: &Tensor, delta_t: Option<&Tensor>, dtype: candle_core::DType) -> Result<Tensor> {
+        let mut c = self.cond_mlp(&self.cond, t, dtype)?;
+        match (&self.delta_cond, delta_t) {
+            (Some(m), Some(d)) => c = (c + self.cond_mlp(m, d, dtype)?)?,
+            (Some(_), None) => return Err(IrodoriError::InvalidInput("delta_t is required for a MeanFlow forward pass".into())),
+            (None, Some(_)) => return Err(IrodoriError::InvalidInput("delta_t was provided to an RF velocity model".into())),
+            (None, None) => {}
+        }
+        Ok(c.unsqueeze(1)?)
+    }
+
+    /// `x_t: (B, T, patched_latent_dim)`, `t: (B,)` → 速度 `(B, T, patched_latent_dim)`（RF モデル）。
     pub fn forward_with_encoded_conditions(
         &self,
         x_t: &Tensor,
         t: &Tensor,
+        c: &EncodedConditions,
+        latent_mask: Option<&Tensor>,
+        kv_cache: Option<&ContextKv>,
+    ) -> Result<Tensor> {
+        self.forward_inner(x_t, t, None, c, latent_mask, kv_cache)
+    }
+
+    /// MeanFlow モデルの順伝播。`delta_t: (B,)` は区間幅 `t - t_next`。
+    pub fn forward_meanflow(
+        &self,
+        x_t: &Tensor,
+        t: &Tensor,
+        delta_t: &Tensor,
+        c: &EncodedConditions,
+        latent_mask: Option<&Tensor>,
+        kv_cache: Option<&ContextKv>,
+    ) -> Result<Tensor> {
+        self.forward_inner(x_t, t, Some(delta_t), c, latent_mask, kv_cache)
+    }
+
+    fn forward_inner(
+        &self,
+        x_t: &Tensor,
+        t: &Tensor,
+        delta_t: Option<&Tensor>,
         c: &EncodedConditions,
         latent_mask: Option<&Tensor>,
         kv_cache: Option<&ContextKv>,
@@ -113,7 +166,7 @@ impl Dit {
                 return Err(IrodoriError::InvalidInput(format!("kv cache has {} layers, model has {}", cache.len(), self.blocks.len())));
             }
         }
-        let cond = self.time_cond(t, x_t.dtype())?;
+        let cond = self.time_cond(t, delta_t, x_t.dtype())?;
         let mut x = self.in_proj.forward(x_t)?;
         let freqs = FreqsCis::new(self.head_dim, s, 10000.0, x.device())?;
 
@@ -143,7 +196,7 @@ impl Dit {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::conditioner::EncodedConditions;
     use crate::config::ModelConfig;
@@ -151,12 +204,12 @@ mod tests {
     use crate::nn::test_util::{fake_tensor, vb_from_spec};
     use candle_core::{Device, Tensor};
 
-    const DIM: usize = 8;
+    pub(crate) const DIM: usize = 8;
     const HEADS: usize = 2;
     const LAYERS: usize = 2;
-    const LATENT: usize = 3;
+    pub(crate) const LATENT: usize = 3;
 
-    fn cfg() -> ModelConfig {
+    pub(crate) fn cfg() -> ModelConfig {
         ModelConfig {
             latent_dim: LATENT,
             model_dim: DIM,
@@ -184,7 +237,15 @@ mod tests {
         s
     }
 
-    fn dit() -> Dit {
+    pub(crate) fn dit() -> Dit {
+        dit_with(false)
+    }
+
+    pub(crate) fn dit_meanflow() -> Dit {
+        dit_with(true)
+    }
+
+    fn dit_with(meanflow: bool) -> Dit {
         let mut sp: Vec<(String, Vec<usize>)> = vec![
             ("cond_module.0.weight".into(), vec![DIM, 4]),
             ("cond_module.2.weight".into(), vec![DIM, DIM]),
@@ -204,14 +265,21 @@ mod tests {
             sp.extend(adaln(&format!("{p}attention_adaln"), 2));
             sp.extend(adaln(&format!("{p}mlp_adaln"), 2));
         }
-        Dit::load(vb_from_spec(sp), &cfg()).unwrap()
+        let mut c = cfg();
+        if meanflow {
+            c.flow_parameterization = "meanflow".into();
+            sp.push(("delta_cond_module.0.weight".into(), vec![DIM, 4]));
+            sp.push(("delta_cond_module.2.weight".into(), vec![DIM, DIM]));
+            sp.push(("delta_cond_module.4.weight".into(), vec![3 * DIM, DIM]));
+        }
+        Dit::load(vb_from_spec(sp), &c).unwrap()
     }
 
-    fn mask(v: &[u8]) -> Tensor {
+    pub(crate) fn mask(v: &[u8]) -> Tensor {
         Tensor::from_slice(v, (1, v.len()), &Device::Cpu).unwrap()
     }
 
-    fn conds(text_seed: &str) -> EncodedConditions {
+    pub(crate) fn conds(text_seed: &str) -> EncodedConditions {
         EncodedConditions {
             text: fake_tensor(text_seed, &[1, 3, 4]),
             text_mask: mask(&[1, 1, 1]),
@@ -220,11 +288,11 @@ mod tests {
         }
     }
 
-    fn x_t() -> Tensor {
+    pub(crate) fn x_t() -> Tensor {
         fake_tensor("xt", &[1, 5, LATENT])
     }
 
-    fn t() -> Tensor {
+    pub(crate) fn t() -> Tensor {
         Tensor::from_slice(&[0.5f32], 1, &Device::Cpu).unwrap()
     }
 
@@ -301,6 +369,31 @@ mod tests {
         let cache = dit.build_context_kv_cache(&enc).unwrap();
         let vc = dit.forward_with_encoded_conditions(&g["x_t"], &g["t"], &enc, None, Some(&cache)).unwrap();
         close(&vc, "velocity");
+    }
+
+    fn delta(v: f32) -> Tensor {
+        Tensor::from_slice(&[v], 1, &Device::Cpu).unwrap()
+    }
+
+    #[test]
+    fn meanflow_model_requires_delta_t() {
+        let d = dit_meanflow();
+        assert!(d.forward_with_encoded_conditions(&x_t(), &t(), &conds("txt"), None, None).is_err());
+    }
+
+    #[test]
+    fn rf_model_rejects_delta_t() {
+        let d = dit();
+        assert!(d.forward_meanflow(&x_t(), &t(), &delta(0.25), &conds("txt"), None, None).is_err());
+    }
+
+    #[test]
+    fn meanflow_delta_changes_the_output() {
+        let d = dit_meanflow();
+        let c = conds("txt");
+        let a = d.forward_meanflow(&x_t(), &t(), &delta(0.25), &c, None, None).unwrap();
+        let b = d.forward_meanflow(&x_t(), &t(), &delta(0.75), &c, None, None).unwrap();
+        assert!(crate::golden::assert_close(&a, &b, 1e-4, 0.0).is_err());
     }
 
     #[test]

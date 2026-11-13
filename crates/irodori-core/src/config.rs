@@ -10,6 +10,8 @@ use crate::{IrodoriError, Result};
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct ModelConfig {
+    /// `rf_velocity`（既定）または `meanflow`（`delta_t` 条件つき）。
+    pub flow_parameterization: String,
     pub latent_dim: usize,
     pub latent_patch_size: usize,
     pub model_dim: usize,
@@ -61,6 +63,7 @@ pub struct ModelConfig {
 impl Default for ModelConfig {
     fn default() -> Self {
         Self {
+            flow_parameterization: "rf_velocity".into(),
             latent_dim: 128,
             latent_patch_size: 1,
             model_dim: 2048,
