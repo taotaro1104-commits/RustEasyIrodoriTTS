@@ -640,7 +640,13 @@ async fn a_registered_candidate_becomes_a_voice_with_its_creation_record() {
     let index: Value =
         serde_json::from_slice(&std::fs::read(f.dir.path().join("voices/index.json")).unwrap())
             .unwrap();
-    assert_eq!(index[0]["creation"], *creation);
+    let saved = index
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|v| v["id"] == voice["id"])
+        .unwrap();
+    assert_eq!(saved["creation"], *creation);
 }
 
 #[tokio::test]
