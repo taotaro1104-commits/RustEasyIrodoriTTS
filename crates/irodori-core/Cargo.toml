@@ -17,6 +17,7 @@ tokenizers.workspace = true
 symphonia.workspace = true
 hound.workspace = true
 bytemuck = "1"
+rayon = "1"
 
 [dev-dependencies]
 tempfile.workspace = true

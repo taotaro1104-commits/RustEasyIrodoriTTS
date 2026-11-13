@@ -102,6 +102,8 @@ pub struct SynthOutput {
     pub latent_steps: usize,
     /// 利用者に見せる注意（長さのクランプなど）。
     pub warnings: Vec<String>,
+    /// 段階ごとの所要時間（秒）。順に reference / conditions / sampling / decode。
+    pub timings: Vec<(&'static str, f64)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -354,9 +356,14 @@ impl Pipeline {
             .then(|| self.token_tensors(caption_text, cfg.max_caption_len.unwrap_or(512), caption_text.is_empty()))
             .transpose()?;
 
+        let mut timings: Vec<(&'static str, f64)> = Vec::new();
+        let mut mark = std::time::Instant::now();
+
         // 段階 1: 参照音声の encode（codec）
         let reference = cfg.use_speaker_condition_resolved().then(|| self.reference(req.ref_wav.as_deref())).transpose()?;
         let has_speaker = req.ref_wav.is_some() && reference.is_some();
+        timings.push(("reference", mark.elapsed().as_secs_f64()));
+        mark = std::time::Instant::now();
 
         // 段階 2: 条件エンコードと長さ決定（テキストエンコーダ・speaker・duration）
         let (enc, plan) = {
@@ -382,6 +389,8 @@ impl Pipeline {
             (enc, plan)
         };
 
+        timings.push(("conditions", mark.elapsed().as_secs_f64()));
+        mark = std::time::Instant::now();
         let mut warnings: Vec<String> = Vec::new();
         let requested_s = match req.seconds {
             Some(s) => s,
@@ -410,6 +419,8 @@ impl Pipeline {
             }
         };
         drop(enc);
+        timings.push(("sampling", mark.elapsed().as_secs_f64()));
+        mark = std::time::Instant::now();
         let z = z.narrow(1, 0, plan.latent_steps)?;
 
         // 段階 4: decode（codec）
@@ -418,7 +429,8 @@ impl Pipeline {
         let limit = trim_limit(plan.target_samples, flat, hop, req.trim_tail);
         let mut samples = self.codec()?.decode_chunked(&z, DECODE_CHUNK_FRAMES, DECODE_OVERLAP_FRAMES)?.flatten_all()?.to_vec1::<f32>()?;
         samples.truncate(limit);
-        Ok(SynthOutput { samples, sample_rate: sr, seed, latent: z, latent_steps: plan.latent_steps, warnings })
+        timings.push(("decode", mark.elapsed().as_secs_f64()));
+        Ok(SynthOutput { samples, sample_rate: sr, seed, latent: z, latent_steps: plan.latent_steps, warnings, timings })
     }
 }
 
@@ -533,6 +545,8 @@ mod tests {
             ..SynthRequest::default()
         };
         let out = p.synthesize(&req).unwrap();
+        let stages: Vec<&str> = out.timings.iter().map(|t| t.0).collect();
+        assert_eq!(stages, ["reference", "conditions", "sampling", "decode"]);
         let lat: Vec<f32> = out.latent.flatten_all().unwrap().to_vec1().unwrap();
         let want_lat: Vec<f32> = g["latent"].flatten_all().unwrap().to_vec1().unwrap();
         let want_audio: Vec<f32> = g["audio"].flatten_all().unwrap().to_vec1().unwrap();

@@ -34,6 +34,9 @@ fn main() -> Result<()> {
 
     if args.report {
         println!("load: {load_secs:.2}s, synthesis: {synth_secs:.2}s, RTF: {:.2}", synth_secs / audio_secs.max(1e-9));
+        for (stage, secs) in &out.timings {
+            println!("  {stage}: {secs:.2}s");
+        }
         match mem::peak_memory_mb() {
             Some(mb) => println!("peak memory: {mb:.0} MB"),
             None => println!("peak memory: unavailable"),
