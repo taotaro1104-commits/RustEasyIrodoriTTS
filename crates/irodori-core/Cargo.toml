@@ -12,6 +12,9 @@ safetensors.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+regex.workspace = true
+unicode-normalization.workspace = true
+tokenizers.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
