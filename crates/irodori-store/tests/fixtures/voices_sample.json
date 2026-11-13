@@ -1,0 +1,28 @@
+[
+  {
+    "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "revision": 3,
+    "audio": "voices/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/dddddddddddddddddddddddddddddddd.wav",
+    "name": "話者A",
+    "model": "Aratako/Irodori-TTS-v4.1-Small",
+    "caption": "落ち着いた女性の声",
+    "sound_revision": 2,
+    "creation": {
+      "mode": "design",
+      "model": "Aratako/Irodori-TTS-v4.1-Small",
+      "candidates": 2
+    },
+    "future_voice_field": [
+      1,
+      2
+    ]
+  },
+  {
+    "id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "revision": 1,
+    "audio": "voices/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/ffffffffffffffffffffffffffffffff.wav",
+    "name": "話者B",
+    "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+    "caption": ""
+  }
+]

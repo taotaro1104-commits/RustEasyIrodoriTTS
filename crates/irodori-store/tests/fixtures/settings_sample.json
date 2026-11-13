@@ -1,0 +1,33 @@
+{
+  "defaults": {
+    "schema": 2,
+    "backend": "cpu",
+    "theme": "light",
+    "auto_browser": true,
+    "restore_input": false,
+    "inherit": true,
+    "auto_export": true,
+    "custom_output": false,
+    "output_dir": "",
+    "custom_pattern": false,
+    "pattern": "$連番$_$話者名$_$日付$",
+    "txt": false,
+    "last_project": ""
+  },
+  "saved": {
+    "schema": 2,
+    "backend": "cpu",
+    "theme": "dark",
+    "auto_browser": true,
+    "restore_input": false,
+    "inherit": true,
+    "auto_export": true,
+    "custom_output": false,
+    "output_dir": "",
+    "custom_pattern": false,
+    "pattern": "$連番$_$話者名$_$日付$",
+    "txt": true,
+    "last_project": "0123456789abcdef0123456789abcdef",
+    "future_setting": "x"
+  }
+}

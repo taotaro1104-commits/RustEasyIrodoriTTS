@@ -1,0 +1,86 @@
+{
+  "schema": 2,
+  "id": "0123456789abcdef0123456789abcdef",
+  "revision": 7,
+  "name": "サンプル台本",
+  "selected": "cccccccccccccccccccccccccccccccc",
+  "dictionary_enabled": true,
+  "generation": {
+    "steps": null,
+    "duration_scale": 1.0,
+    "seed": null,
+    "cfg_scale_text": 3.0,
+    "cfg_scale_caption": 4.0,
+    "cfg_scale_speaker": 5.0,
+    "cfg_guidance_mode": "independent",
+    "cfg_min_t": 0.5,
+    "cfg_max_t": 1.0,
+    "t_schedule_mode": "linear",
+    "sway_coeff": -1.0,
+    "context_kv_cache": true,
+    "seconds": null,
+    "cfg_scale": null,
+    "speaker_kv_scale": null,
+    "max_text_len": null,
+    "max_caption_len": null,
+    "truncation_factor": null,
+    "rescale_k": null,
+    "rescale_sigma": null,
+    "lora_adapter": null,
+    "model_precision": "fp32",
+    "codec_precision": "fp32"
+  },
+  "cards": [
+    {
+      "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "text": "こんにちは。今日は晴れです。",
+      "voice_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "speed": 0.75,
+      "silence": 1.5,
+      "filename": "01",
+      "result": {
+        "path": "outputs/internal/r1/01.wav",
+        "signature": "deadbeef",
+        "seed": 123,
+        "record": "r1",
+        "request": {
+          "text": "こんにちは。",
+          "ordinal": 1,
+          "date": "20261113",
+          "dictionary": {
+            "今日": "きょう"
+          },
+          "card": {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "text": "こんにちは。今日は晴れです。"
+          }
+        },
+        "export": {
+          "wav": "outputs/exports/001_x_20261113.wav"
+        }
+      },
+      "error": "",
+      "status": "完了",
+      "future_card_field": "keep me"
+    },
+    {
+      "id": "cccccccccccccccccccccccccccccccc",
+      "text": "二枚目",
+      "voice_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "speed": 0.75,
+      "silence": 1.5,
+      "filename": "",
+      "result": null,
+      "error": "boom",
+      "status": "失敗",
+      "missing_voice_name": "消えた話者"
+    }
+  ],
+  "future_project_field": {
+    "nested": [
+      1,
+      2.5,
+      null
+    ]
+  }
+}

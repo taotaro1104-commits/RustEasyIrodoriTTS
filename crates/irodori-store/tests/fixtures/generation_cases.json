@@ -1,0 +1,1190 @@
+[
+  {
+    "input": {},
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "steps": "40"
+    },
+    "output": {
+      "steps": 40,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "steps": 40
+    },
+    "output": {
+      "steps": 40,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "steps": 40.9
+    },
+    "output": {
+      "steps": 40,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "steps": 0
+    },
+    "error": "計算回数は1～120で指定してください。"
+  },
+  {
+    "input": {
+      "steps": 121
+    },
+    "error": "計算回数は1～120で指定してください。"
+  },
+  {
+    "input": {
+      "steps": ""
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "steps": null
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "seed": 5
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": 5,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "seed": ""
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "seed": 4294967296
+    },
+    "error": "シードは0～4294967295で指定してください。"
+  },
+  {
+    "input": {
+      "seed": -1
+    },
+    "error": "シードは0～4294967295で指定してください。"
+  },
+  {
+    "input": {
+      "seed": "7"
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": 7,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "duration_scale": 2
+    },
+    "error": "duration_scaleは0.5～1.5で指定してください。"
+  },
+  {
+    "input": {
+      "duration_scale": 0.4
+    },
+    "error": "duration_scaleは0.5～1.5で指定してください。"
+  },
+  {
+    "input": {
+      "duration_scale": 1
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "duration_scale": "1.25"
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.25,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "cfg_scale_text": 11
+    },
+    "error": "cfg_scale_textは0～10で指定してください。"
+  },
+  {
+    "input": {
+      "cfg_scale_caption": -1
+    },
+    "error": "cfg_scale_captionは0～10で指定してください。"
+  },
+  {
+    "input": {
+      "cfg_scale_speaker": 0
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 0.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "cfg_scale_speaker": 10
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 10.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "cfg_min_t": 0.9,
+      "cfg_max_t": 0.5
+    },
+    "error": "条件反映の開始位置は終了位置以下にしてください。"
+  },
+  {
+    "input": {
+      "cfg_min_t": 0,
+      "cfg_max_t": 1
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.0,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "sway_coeff": -2
+    },
+    "error": "sway_coeffは-1～1.5で指定してください。"
+  },
+  {
+    "input": {
+      "sway_coeff": 1.5
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": 1.5,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "sway_coeff": 0
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": 0.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "t_schedule_mode": "bad"
+    },
+    "error": "生成設定が不正です。"
+  },
+  {
+    "input": {
+      "t_schedule_mode": "sway"
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "sway",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "cfg_guidance_mode": "joint"
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "joint",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "cfg_guidance_mode": "x"
+    },
+    "error": "生成設定が不正です。"
+  },
+  {
+    "input": {
+      "seconds": 1
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": 1.0,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "seconds": 31
+    },
+    "error": "secondsは0.5～30で指定してください。"
+  },
+  {
+    "input": {
+      "seconds": ""
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "cfg_scale": 3
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": 3.0,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "speaker_kv_scale": 0.001
+    },
+    "error": "speaker_kv_scaleは0.01～10で指定してください。"
+  },
+  {
+    "input": {
+      "speaker_kv_scale": 2
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": 2.0,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "max_text_len": 100
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": 100,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "max_text_len": 257
+    },
+    "error": "max_text_lenは1～256で指定してください。"
+  },
+  {
+    "input": {
+      "max_caption_len": 512
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": 512,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "max_caption_len": 513
+    },
+    "error": "max_caption_lenは1～512で指定してください。"
+  },
+  {
+    "input": {
+      "max_text_len": 12.7
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": 12,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "truncation_factor": 0.5
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": 0.5,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "truncation_factor": 11
+    },
+    "error": "truncation_factorは0.01～10で指定してください。"
+  },
+  {
+    "input": {
+      "rescale_k": 1.5
+    },
+    "error": "再スケーリングの2項目は両方指定してください。"
+  },
+  {
+    "input": {
+      "rescale_sigma": 2
+    },
+    "error": "再スケーリングの2項目は両方指定してください。"
+  },
+  {
+    "input": {
+      "rescale_k": 1.5,
+      "rescale_sigma": 2
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": 1.5,
+      "rescale_sigma": 2.0,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "rescale_k": 0,
+      "rescale_sigma": 1
+    },
+    "error": "rescale_kは0.01～100で指定してください。"
+  },
+  {
+    "input": {
+      "lora_adapter": " x "
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": "x",
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "lora_adapter": ""
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "lora_adapter": null
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "model_precision": "bf16",
+      "codec_precision": "fp16"
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "bf16",
+      "codec_precision": "fp16"
+    }
+  },
+  {
+    "input": {
+      "model_precision": "fp64"
+    },
+    "error": "計算精度が不正です。"
+  },
+  {
+    "input": {
+      "codec_precision": 3
+    },
+    "error": "計算精度が不正です。"
+  },
+  {
+    "input": {
+      "context_kv_cache": false
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": false,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "context_kv_cache": 0
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": 0,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "unknown_key": 1,
+      "steps": 4
+    },
+    "output": {
+      "steps": 4,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  },
+  {
+    "input": {
+      "cfg_scale_text": 3,
+      "cfg_scale_caption": 4,
+      "cfg_scale_speaker": 5
+    },
+    "output": {
+      "steps": null,
+      "duration_scale": 1.0,
+      "seed": null,
+      "cfg_scale_text": 3.0,
+      "cfg_scale_caption": 4.0,
+      "cfg_scale_speaker": 5.0,
+      "cfg_guidance_mode": "independent",
+      "cfg_min_t": 0.5,
+      "cfg_max_t": 1.0,
+      "t_schedule_mode": "linear",
+      "sway_coeff": -1.0,
+      "context_kv_cache": true,
+      "seconds": null,
+      "cfg_scale": null,
+      "speaker_kv_scale": null,
+      "max_text_len": null,
+      "max_caption_len": null,
+      "truncation_factor": null,
+      "rescale_k": null,
+      "rescale_sigma": null,
+      "lora_adapter": null,
+      "model_precision": "fp32",
+      "codec_precision": "fp32"
+    }
+  }
+]
