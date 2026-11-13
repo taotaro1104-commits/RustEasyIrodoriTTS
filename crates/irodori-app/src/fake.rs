@@ -20,6 +20,7 @@ const CLIP_SAMPLES: usize = 4_800;
 pub struct FakeSynth {
     root: PathBuf,
     steps: usize,
+    clip_samples: usize,
     step_delay: Duration,
     failures: HashMap<String, SynthError>,
     panics: HashSet<String>,
@@ -35,6 +36,7 @@ impl FakeSynth {
         FakeSynth {
             root: root.to_path_buf(),
             steps: 4,
+            clip_samples: CLIP_SAMPLES,
             step_delay: Duration::ZERO,
             failures: HashMap::new(),
             panics: HashSet::new(),
@@ -48,6 +50,12 @@ impl FakeSynth {
 
     pub fn with_steps(mut self, steps: usize) -> FakeSynth {
         self.steps = steps;
+        self
+    }
+
+    /// 作る音声の長さ（秒）。既定は 0.2 秒。話者に採用できる 1 秒以上にしたいときに使う。
+    pub fn with_clip_seconds(mut self, seconds: f64) -> FakeSynth {
+        self.clip_samples = (f64::from(SAMPLE_RATE) * seconds) as usize;
         self
     }
 
@@ -91,8 +99,8 @@ impl FakeSynth {
     }
 }
 
-fn sine_clip() -> Vec<f32> {
-    (0..CLIP_SAMPLES)
+fn sine_clip(samples: usize) -> Vec<f32> {
+    (0..samples)
         .map(|i| 0.2 * (2.0 * std::f32::consts::PI * 440.0 * i as f32 / SAMPLE_RATE as f32).sin())
         .collect()
 }
@@ -141,7 +149,7 @@ impl Synthesizer for FakeSynth {
             }
             std::fs::create_dir_all(&folder).map_err(|e| SynthError::Failed(e.to_string()))?;
             let path = folder.join(format!("{:02}.wav", candidate + 1));
-            irodori_core::audio::write_wav(&path, &sine_clip(), SAMPLE_RATE)
+            irodori_core::audio::write_wav(&path, &sine_clip(self.clip_samples), SAMPLE_RATE)
                 .map_err(|e| SynthError::Failed(e.to_string()))?;
             paths.push(path);
         }

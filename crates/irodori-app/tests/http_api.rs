@@ -496,8 +496,6 @@ async fn unimplemented_routes_return_501_json() {
         "/api/cleanup-preview",
         "/api/choose-folder",
         "/api/open-output",
-        "/api/design",
-        "/api/design-registration",
         "/api/input-data/save",
         "/api/input-data/load",
     ] {

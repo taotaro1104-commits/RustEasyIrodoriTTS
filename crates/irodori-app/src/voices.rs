@@ -33,12 +33,29 @@ fn source_of(app: &AppState, data: &Map<String, Value>) -> ApiResult<Option<std:
     }
 }
 
-pub async fn voice(State(app): State<AppState>, body: Bytes) -> ApiResult<Json<Value>> {
-    let data = parse(&body)?;
-    let source = source_of(&app, &data)?;
-    // 試作ジョブの候補を採用する経路（`job`）。ジョブが無い・候補でなければ、選び直しを促す。
-    if data.get("job").is_some_and(|j| !is_falsy(j)) {
+/// 試作ジョブの候補を採用する経路（`job`）。完了したジョブの候補（`asset`）でなければ、選び直しを促す。
+/// 採用すると、話者の `creation` はジョブの記録で置き換わる（画面から送られた値は使わない）。
+fn adopt_candidate(app: &AppState, data: &mut Map<String, Value>) -> ApiResult<()> {
+    let (Some(Value::String(job)), Some(Value::String(asset))) =
+        (data.get("job"), data.get("asset"))
+    else {
         return Err(invalid(PICK_AGAIN));
+    };
+    let (assets, record) = app
+        .jobs
+        .design_result(job)
+        .filter(|(assets, _)| assets.contains(asset))
+        .ok_or_else(|| invalid(PICK_AGAIN))?;
+    drop(assets);
+    data.insert("creation".into(), record);
+    Ok(())
+}
+
+pub async fn voice(State(app): State<AppState>, body: Bytes) -> ApiResult<Json<Value>> {
+    let mut data = parse(&body)?;
+    let source = source_of(&app, &data)?;
+    if data.get("job").is_some_and(|j| !is_falsy(j)) {
+        adopt_candidate(&app, &mut data)?;
     }
     let saved = app
         .store
@@ -46,6 +63,21 @@ pub async fn voice(State(app): State<AppState>, body: Bytes) -> ApiResult<Json<V
     Ok(Json(
         json!({"message": "話者を登録しました。", "voice": voice_json(&saved)?}),
     ))
+}
+
+/// 声の試作を始める。応答はジョブの ID だけ（v2.0 と同じ）。
+pub async fn design(State(app): State<AppState>, body: Bytes) -> ApiResult<Json<Value>> {
+    let data = parse(&body)?;
+    Ok(Json(json!({"job": app.jobs.submit_design(&data, false)?})))
+}
+
+/// 登録用の定型文で声の試作を始める。
+pub async fn design_registration(
+    State(app): State<AppState>,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    let data = parse(&body)?;
+    Ok(Json(json!({"job": app.jobs.submit_design(&data, true)?})))
 }
 
 pub async fn rename(State(app): State<AppState>, body: Bytes) -> ApiResult<Json<Value>> {

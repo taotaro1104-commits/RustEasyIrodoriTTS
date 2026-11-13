@@ -26,14 +26,12 @@ pub(crate) type ApiResult<T> = Result<T, ApiError>;
 const NOT_YET: &str = "未対応です（この版ではまだ使えません）。";
 
 /// M2b/M2c で実装するルート（POST）。
-const UNIMPLEMENTED_POST: [&str; 12] = [
+const UNIMPLEMENTED_POST: [&str; 10] = [
     "/api/choose-folder",
     "/api/cleanup-preview",
     "/api/cleanup",
     "/api/input-data/save",
     "/api/input-data/load",
-    "/api/design-registration",
-    "/api/design",
     "/api/audio-list",
     "/api/bundle",
     "/api/save-audio",
@@ -317,6 +315,11 @@ pub fn routes() -> Router<AppState> {
         .route("/api/voice", post(crate::voices::voice))
         .route("/api/voice/rename", post(crate::voices::rename))
         .route("/api/voice/delete", post(crate::voices::delete))
+        .route("/api/design", post(crate::voices::design))
+        .route(
+            "/api/design-registration",
+            post(crate::voices::design_registration),
+        )
         .route(
             "/api/upload",
             post(crate::upload::upload).layer(DefaultBodyLimit::max(
