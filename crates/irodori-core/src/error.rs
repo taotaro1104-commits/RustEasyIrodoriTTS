@@ -7,6 +7,14 @@ pub enum IrodoriError {
     Candle(#[from] candle_core::Error),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("json error: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("missing safetensors metadata entry: {0}")]
+    MissingMetadata(String),
+    #[error("invalid safetensors file: {0}")]
+    InvalidFile(String),
+    #[error("invalid config: {0}")]
+    InvalidConfig(String),
     #[error("tokenizer error: {0}")]
     Tokenizer(String),
     #[error("invalid input: {0}")]
