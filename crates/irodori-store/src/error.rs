@@ -39,8 +39,14 @@ impl StoreError {
     }
 }
 
+/// ログに残す I/O エラーの説明（種類と OS のコード）。利用者向けの文には使わない。
+fn describe_io(e: &std::io::Error) -> String {
+    format!("{:?} (os error {:?}): {e}", e.kind(), e.raw_os_error())
+}
+
 impl From<std::io::Error> for StoreError {
-    fn from(_: std::io::Error) -> Self {
+    fn from(e: std::io::Error) -> Self {
+        tracing::warn!("file operation failed: {}", describe_io(&e));
         StoreError::Io(
             "ファイルを読み書きできません。保存先の接続・空き容量・アクセス権を確認してください。"
                 .into(),
@@ -51,6 +57,21 @@ impl From<std::io::Error> for StoreError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn io_errors_are_described_with_kind_and_os_code_but_not_the_path() {
+        let e = std::io::Error::from_raw_os_error(5);
+        let text = describe_io(&e);
+        assert!(text.contains("os error 5"), "{text}");
+        assert!(
+            text.contains("PermissionDenied")
+                || text.contains("Uncategorized")
+                || text.contains("Other"),
+            "{text}"
+        );
+        let denied = std::io::Error::new(std::io::ErrorKind::NotFound, "C:\\secret\\file.json");
+        assert!(describe_io(&denied).contains("NotFound"));
+    }
 
     #[test]
     fn status_mapping_follows_the_spec() {

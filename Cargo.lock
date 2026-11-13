@@ -1191,6 +1191,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.21",
+ "tracing",
  "unicode-segmentation",
  "uuid",
 ]
@@ -2455,6 +2456,7 @@ dependencies = [
  "tokio-util",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]

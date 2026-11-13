@@ -92,6 +92,11 @@ async fn editor_file(Path(name): Path<String>) -> Response {
 }
 
 pub fn build_router(state: AppState) -> Router {
+    build_router_with(state, Router::new())
+}
+
+/// `extra` のルートも、同じ安全対策（ローカル限定・トークン・panic の捕捉・ログ）の内側に置く（テスト用の差し込み口）。
+pub fn build_router_with(state: AppState, extra: Router<AppState>) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/editor/{name}", get(editor_file))
@@ -99,9 +104,14 @@ pub fn build_router(state: AppState) -> Router {
         // ブラウザが自動で取りに来る。無いことを 404 にすると、画面のコンソールにエラーとして残る。
         .route("/favicon.ico", get(|| async { StatusCode::NO_CONTENT }))
         .merge(routes::routes())
+        .merge(extra)
+        .layer(middleware::from_fn(errors::json_payload_too_large))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             security::local_only,
+        ))
+        .layer(tower_http::catch_panic::CatchPanicLayer::custom(
+            errors::panic_response,
         ))
         .layer(middleware::from_fn(logging::access_log))
         .with_state(state)

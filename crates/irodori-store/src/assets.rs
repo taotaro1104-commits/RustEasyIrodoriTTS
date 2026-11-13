@@ -22,9 +22,21 @@ fn plain(path: PathBuf) -> PathBuf {
     }
 }
 
-/// 鍵の元になる、解決済みの絶対パス。
+/// 鍵の元になる、解決済みの絶対パス。`canonicalize` できない場所（一部のネットワーク共有など）でも、
+/// ファイルが実在すれば絶対パスで代用する。
 pub fn resolve(path: &Path) -> Option<PathBuf> {
-    path.canonicalize().ok().map(plain)
+    resolve_using(path, |p| p.canonicalize())
+}
+
+fn resolve_using(
+    path: &Path,
+    canonicalize: impl Fn(&Path) -> std::io::Result<PathBuf>,
+) -> Option<PathBuf> {
+    match canonicalize(path) {
+        Ok(resolved) => Some(plain(resolved)),
+        Err(_) if path.is_file() => std::path::absolute(path).ok(),
+        Err(_) => None,
+    }
 }
 
 pub fn key_for(resolved: &Path) -> String {
@@ -72,6 +84,23 @@ impl Assets {
 mod tests {
     use super::*;
     use crate::testutil::temp_root;
+
+    #[test]
+    fn resolve_falls_back_to_an_absolute_path_when_canonicalize_fails() {
+        let dir = temp_root();
+        let file = dir.path().join("a.wav");
+        std::fs::write(&file, b"x").unwrap();
+        let failing = |_: &Path| -> std::io::Result<PathBuf> {
+            Err(std::io::Error::other("no canonicalize here"))
+        };
+        let got = resolve_using(&file, failing).unwrap();
+        assert!(got.is_absolute() && got.is_file(), "{got:?}");
+        assert_eq!(
+            resolve_using(&dir.path().join("missing.wav"), failing),
+            None,
+            "a missing file is still not resolved"
+        );
+    }
 
     #[test]
     fn assets_register_only_existing_files() {

@@ -1,6 +1,10 @@
 //! `StoreError` を、v2.0 と同じ JSON（`{"error": "…"}`）と状態コードに変える。
 
-use axum::http::StatusCode;
+use std::any::Any;
+
+use axum::extract::Request;
+use axum::http::{header, StatusCode};
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use irodori_store::StoreError;
@@ -8,6 +12,41 @@ use serde_json::json;
 
 const INTERNAL_MESSAGE: &str =
     "処理に失敗しました。入力内容を保持したまま、logs/editor.logを確認してください。";
+
+const TOO_LARGE_MESSAGE: &str = "リクエストが大きすぎます。";
+
+/// 本文が上限（2 MB。アップロードのルートだけは別）を超えたとき、axum は文字だけの 413 を返す。画面が読める JSON にそろえる。
+pub async fn json_payload_too_large(request: Request, next: Next) -> Response {
+    let response = next.run(request).await;
+    let is_json = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.starts_with("application/json"));
+    if response.status() == StatusCode::PAYLOAD_TOO_LARGE && !is_json {
+        return (
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Json(json!({ "error": TOO_LARGE_MESSAGE })),
+        )
+            .into_response();
+    }
+    response
+}
+
+/// ハンドラが panic したときの応答。詳細はログにだけ残し、画面には決まった文を返す。
+pub fn panic_response(panic: Box<dyn Any + Send + 'static>) -> Response {
+    let detail = panic
+        .downcast_ref::<&str>()
+        .map(|s| (*s).to_string())
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "unknown panic".into());
+    tracing::error!("Editor handler panicked: {detail}");
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(json!({ "error": INTERNAL_MESSAGE })),
+    )
+        .into_response()
+}
 
 #[derive(Debug)]
 pub struct ApiError(pub StoreError);

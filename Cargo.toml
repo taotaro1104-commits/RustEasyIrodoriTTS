@@ -29,7 +29,7 @@ ryu = "1"
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "fs"] }
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.6", features = ["fs"] }
+tower-http = { version = "0.6", features = ["fs", "catch-panic"] }
 rust-embed = "8"
 pulldown-cmark = "0.13"
 subtle = "2"

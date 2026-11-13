@@ -21,6 +21,7 @@ pub const VOICE: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 pub struct Fixture {
     pub dir: tempfile::TempDir,
     pub app: Router,
+    pub state: AppState,
     pub assets: Arc<Assets>,
     pub store: Arc<Store>,
     pub jobs: Arc<JobManager>,
@@ -60,7 +61,8 @@ fn build(with_voice: bool, tweak: impl FnOnce(FakeSynth) -> FakeSynth) -> Fixtur
     Fixture {
         assets: state.assets.clone(),
         jobs: state.jobs.clone(),
-        app: build_router(state),
+        app: build_router(state.clone()),
+        state,
         dir,
         store,
         synth,
