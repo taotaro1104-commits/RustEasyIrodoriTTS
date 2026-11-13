@@ -6,6 +6,8 @@ use std::sync::Arc;
 use axum::body::{to_bytes, Body};
 use axum::http::{header, HeaderMap, Method, Request, StatusCode};
 use axum::Router;
+use irodori_app::fake::FakeSynth;
+use irodori_app::jobs::JobManager;
 use irodori_app::{build_router, AppState};
 use irodori_store::{assets::Assets, Store};
 use serde_json::Value;
@@ -13,32 +15,55 @@ use tower::ServiceExt;
 
 pub const TOKEN: &str = "test-token-123";
 
+pub const MF: &str = "Aratako/Irodori-TTS-v4.1-Small-MF";
+pub const VOICE: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
 pub struct Fixture {
     pub dir: tempfile::TempDir,
     pub app: Router,
     pub assets: Arc<Assets>,
     pub store: Arc<Store>,
+    pub jobs: Arc<JobManager>,
+    pub synth: Arc<FakeSynth>,
 }
 
 pub fn fixture() -> Fixture {
+    build(false, |s| s)
+}
+
+/// 話者を 1 人（`VOICE`）持つデータフォルダ。擬似エンジンは `tweak` で調整する。
+pub fn fixture_with_voice(tweak: impl FnOnce(FakeSynth) -> FakeSynth) -> Fixture {
+    build(true, tweak)
+}
+
+fn build(with_voice: bool, tweak: impl FnOnce(FakeSynth) -> FakeSynth) -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     for sub in ["projects", "voices", "config", "temp", "outputs"] {
         std::fs::create_dir_all(dir.path().join(sub)).unwrap();
     }
+    if with_voice {
+        let audio = format!("voices/{VOICE}/ref.wav");
+        std::fs::create_dir_all(dir.path().join(&audio).parent().unwrap()).unwrap();
+        std::fs::write(dir.path().join(&audio), b"RIFF").unwrap();
+        let voices = serde_json::json!([{"id": VOICE, "revision": 1, "audio": audio, "name": "話者A", "model": MF, "caption": "落ち着いた声"}]);
+        std::fs::write(dir.path().join("voices/index.json"), voices.to_string()).unwrap();
+    }
     let store = Arc::new(Store::open(dir.path()).unwrap());
-    let assets = Arc::new(Assets::new());
-    let state = AppState {
-        store: store.clone(),
-        assets: assets.clone(),
-        token: TOKEN.to_string(),
-        root: PathBuf::from(dir.path()),
-        backend: "cpu".to_string(),
-    };
+    let synth = Arc::new(tweak(FakeSynth::new(dir.path())));
+    let state = AppState::new(
+        store.clone(),
+        PathBuf::from(dir.path()),
+        TOKEN.to_string(),
+        "cpu".to_string(),
+        synth.clone(),
+    );
     Fixture {
+        assets: state.assets.clone(),
+        jobs: state.jobs.clone(),
         app: build_router(state),
         dir,
-        assets,
         store,
+        synth,
     }
 }
 

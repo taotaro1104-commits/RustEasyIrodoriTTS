@@ -149,3 +149,45 @@ fn a_busy_port_moves_to_the_next_one() {
     );
     assert_eq!(http_get(actual, "/api/state").map(|r| r.0), Some(200));
 }
+
+#[test]
+fn a_fatal_startup_error_is_written_to_the_log() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("config")).unwrap();
+    std::fs::write(dir.path().join("config/settings.json"), b"{broken").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_irodori-app"))
+        .args([
+            "--data-dir",
+            dir.path().to_str().unwrap(),
+            "--port",
+            &free_port().to_string(),
+            "--no-browser",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("保存データを読み込めません"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let log = std::fs::read_to_string(dir.path().join("logs/editor.log")).unwrap();
+    assert!(
+        log.contains("fatal") && log.contains("保存データを読み込めません"),
+        "the cause is kept for later: {log}"
+    );
+    assert_eq!(
+        std::fs::read(dir.path().join("config/settings.json")).unwrap(),
+        b"{broken",
+        "the broken file is never overwritten"
+    );
+    assert!(
+        !dir.path()
+            .join("projects")
+            .read_dir()
+            .unwrap()
+            .any(|e| e.is_ok()),
+        "no empty project was created by the failed start"
+    );
+}

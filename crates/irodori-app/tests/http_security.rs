@@ -7,7 +7,7 @@ use axum::body::{to_bytes, Body};
 use axum::http::{header, Method, Request, StatusCode};
 use axum::Router;
 use irodori_app::{build_router, AppState};
-use irodori_store::{assets::Assets, Store};
+use irodori_store::Store;
 use serde_json::Value;
 use tower::ServiceExt;
 
@@ -24,13 +24,14 @@ fn fixture() -> Fixture {
         std::fs::create_dir_all(dir.path().join(sub)).unwrap();
     }
     let store = Arc::new(Store::open(dir.path()).unwrap());
-    let state = AppState {
+    let synth = Arc::new(irodori_app::fake::FakeSynth::new(dir.path()));
+    let state = AppState::new(
         store,
-        assets: Arc::new(Assets::new()),
-        token: TOKEN.to_string(),
-        root: PathBuf::from(dir.path()),
-        backend: "cpu".to_string(),
-    };
+        PathBuf::from(dir.path()),
+        TOKEN.to_string(),
+        "cpu".to_string(),
+        synth,
+    );
     Fixture {
         app: build_router(state),
         _dir: dir,

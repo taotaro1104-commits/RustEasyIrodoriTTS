@@ -8,10 +8,10 @@ use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use irodori_store::assets::Assets;
 use irodori_store::model::{new_project, uid};
 use irodori_store::Store;
 
+use crate::real_synth::RealSynth;
 use crate::{build_router, logging, AppState};
 
 pub const DEFAULT_PORT: u16 = 7860;
@@ -162,24 +162,39 @@ pub async fn run(args: Args) -> Result<()> {
     prepare_dirs(&args.data_dir)?;
     let _lock = acquire_lock(&args.data_dir)?;
     logging::init_file_logging(&args.data_dir)?;
-    let store = Arc::new(Store::open(&args.data_dir)?);
-    fresh_start(&store)?;
+    let result = serve(&args).await;
+    if let Err(e) = &result {
+        // 起動できなかった理由を、画面を持たない起動（ダブルクリックなど）でも後から読めるようにする。
+        tracing::error!("fatal: {e:#}");
+    }
+    result
+}
 
+async fn serve(args: &Args) -> Result<()> {
+    let store = Arc::new(Store::open(&args.data_dir)?);
+    // ポートが取れないときに、空の台本だけを増やさないよう、待ち受けてから新しい台本を開く。
     let listener = bind_listener(args.port)?;
     listener.set_nonblocking(true)?;
+    fresh_start(&store)?;
+
     let port = listener.local_addr()?.port();
     let url = format!("http://127.0.0.1:{port}");
     let settings = store.settings();
-    let state = AppState {
+    let synth = Arc::new(RealSynth::new(args.data_dir.clone(), args.hub_dir()));
+    // トークンは画面にだけ埋め込む使い捨て（乱数 2 つ分）。
+    let state = AppState::new(
         store,
-        assets: Arc::new(Assets::new()),
-        // 画面にだけ埋め込む使い捨てのトークン（乱数 2 つ分）。
-        token: format!("{}{}", uid(), uid()),
-        root: args.data_dir.clone(),
-        backend: settings.backend.clone(),
-    };
+        args.data_dir.clone(),
+        format!("{}{}", uid(), uid()),
+        settings.backend.clone(),
+        synth,
+    );
     println!("Easy-Irodori-TTS: {url}");
-    tracing::info!("listening on {url} (data: {})", args.data_dir.display());
+    tracing::info!(
+        "listening on {url} (data: {}, models: {})",
+        args.data_dir.display(),
+        args.hub_dir().display()
+    );
     if !args.no_browser && settings.auto_browser {
         open_browser_when_ready(url);
     }

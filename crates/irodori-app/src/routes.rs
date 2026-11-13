@@ -1,8 +1,7 @@
 //! M2a の API ルート。応答の形・メッセージ・状態コードは v2.0（`easy_web.py`）に合わせる。
 //! 声の登録・生成・書き出しなど後続の段階（M2b/M2c）のルートは、画面が落ちないよう 501 を返す。
 
-use std::collections::HashSet;
-
+use crate::jobs::SubmitOutcome;
 use axum::body::{Body, Bytes};
 use axum::extract::{Path, Query, Request, State};
 use axum::http::{header, HeaderValue, StatusCode};
@@ -27,13 +26,11 @@ type ApiResult<T> = Result<T, ApiError>;
 const NOT_YET: &str = "未対応です（この版ではまだ使えません）。";
 
 /// M2b/M2c で実装するルート（POST）。
-const UNIMPLEMENTED_POST: [&str; 19] = [
+const UNIMPLEMENTED_POST: [&str; 16] = [
     "/api/upload",
     "/api/choose-folder",
     "/api/cleanup-preview",
     "/api/cleanup",
-    "/api/generate",
-    "/api/stop",
     "/api/input-data/save",
     "/api/input-data/load",
     "/api/voice",
@@ -45,7 +42,6 @@ const UNIMPLEMENTED_POST: [&str; 19] = [
     "/api/bundle",
     "/api/save-audio",
     "/api/export",
-    "/api/unload",
     "/api/open-output",
 ];
 
@@ -78,14 +74,28 @@ fn revision(data: &Map<String, Value>) -> ApiResult<i64> {
         .ok_or_else(|| bad("リクエストの内容が不足しています。画面を再読み込みしてください。"))
 }
 
-fn state_of(app: &AppState, pid: &str) -> ApiResult<Value> {
-    Ok(build_state(
+/// `/api/state`：保存層の状態に、実行中のジョブと、モデルが使えるか（`installed`）を重ねる。
+fn full_state(app: &AppState, pid: Option<&str>) -> ApiResult<Value> {
+    let mut state = build_state(
         &app.store,
         &app.assets,
-        Some(pid),
-        &[],
+        pid,
+        &app.jobs.jobs_json(),
         &app.backend,
-    )?)
+    )?;
+    if let Some(models) = state.get_mut("models").and_then(Value::as_array_mut) {
+        for model in models {
+            let available = model["id"]
+                .as_str()
+                .is_some_and(|id| app.synth.model_available(id));
+            model["installed"] = json!(available);
+        }
+    }
+    Ok(state)
+}
+
+fn state_of(app: &AppState, pid: &str) -> ApiResult<Value> {
+    full_state(app, Some(pid))
 }
 
 #[derive(Deserialize)]
@@ -95,13 +105,7 @@ struct StateQuery {
 
 async fn state(State(app): State<AppState>, Query(q): Query<StateQuery>) -> ApiResult<Json<Value>> {
     let pid = q.pid.filter(|p| !p.is_empty());
-    Ok(Json(build_state(
-        &app.store,
-        &app.assets,
-        pid.as_deref(),
-        &[],
-        &app.backend,
-    )?))
+    Ok(Json(full_state(&app, pid.as_deref())?))
 }
 
 async fn edit(State(app): State<AppState>, body: Bytes) -> ApiResult<Json<Value>> {
@@ -138,10 +142,11 @@ async fn action(State(app): State<AppState>, body: Bytes) -> ApiResult<Json<Valu
         .and_then(|a| a.iter().map(|v| v.as_str().map(str::to_string)).collect());
     let dict = dictionary_for(&app, pid, act)?;
     // 動いている生成依頼は M2b から。ここでは無い。
+    let active = app.jobs.active_card_ids(pid);
     let outcome = ops::action(
         &app.store,
         &dict,
-        &HashSet::new(),
+        &active,
         pid,
         rev,
         act,
@@ -164,8 +169,7 @@ async fn project(State(app): State<AppState>, body: Bytes) -> ApiResult<Json<Val
 async fn recover_previous(State(app): State<AppState>, body: Bytes) -> ApiResult<Json<Value>> {
     let data = parse(&body)?;
     let pid = text(&data, "pid")?;
-    // 生成中の拒否は、生成（M2b）が入ったときに本物の状態を渡す。
-    ops::recover_previous(&app.store, pid, revision(&data)?, false)?;
+    ops::recover_previous(&app.store, pid, revision(&data)?, app.jobs.busy())?;
     Ok(Json(state_of(&app, pid)?))
 }
 
@@ -253,6 +257,47 @@ async fn audio(
     Ok(response)
 }
 
+async fn generate(State(app): State<AppState>, body: Bytes) -> ApiResult<Json<Value>> {
+    let data = parse(&body)?;
+    let pid = text(&data, "pid")?;
+    let flag = |key: &str| {
+        data.get(key)
+            .is_some_and(|v| !irodori_store::signature::is_falsy(v))
+    };
+    let cid = data
+        .get("cid")
+        .and_then(Value::as_str)
+        .filter(|c| !c.is_empty());
+    match app.jobs.submit(
+        pid,
+        revision(&data)?,
+        cid,
+        flag("changed"),
+        flag("allow_long"),
+    )? {
+        SubmitOutcome::Started => {
+            let mut out = state_of(&app, pid)?;
+            if let Some(m) = out.as_object_mut() {
+                m.insert("message".into(), json!("生成を開始しました。"));
+            }
+            Ok(Json(out))
+        }
+        SubmitOutcome::NeedsLongConfirmation { long_cards } => Ok(Json(
+            json!({"needs_long_confirmation": true, "long_cards": long_cards}),
+        )),
+    }
+}
+
+async fn stop(State(app): State<AppState>) -> Json<Value> {
+    app.jobs.stop();
+    Json(json!({"message": "停止を受け付けました。処理中の1件が終わるまでお待ちください。"}))
+}
+
+async fn unload(State(app): State<AppState>) -> ApiResult<Json<Value>> {
+    app.jobs.unload()?;
+    Ok(Json(json!({"message": "モデルを解放しました。"})))
+}
+
 async fn not_yet() -> Response {
     (
         StatusCode::NOT_IMPLEMENTED,
@@ -270,6 +315,9 @@ pub fn routes() -> Router<AppState> {
         .route("/api/settings", post(settings))
         .route("/api/dictionary", post(dictionary_route))
         .route("/api/recover-previous", post(recover_previous))
+        .route("/api/generate", post(generate))
+        .route("/api/stop", post(stop))
+        .route("/api/unload", post(unload))
         .route("/audio/{key}", get(audio))
         .route("/bundle/{key}", get(not_yet));
     for path in UNIMPLEMENTED_POST {

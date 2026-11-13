@@ -25,6 +25,9 @@ use axum::routing::get;
 use axum::Router;
 use irodori_store::{assets::Assets, Store};
 
+use crate::jobs::JobManager;
+use crate::synth::Synthesizer;
+
 #[derive(Clone)]
 pub struct AppState {
     pub store: Arc<Store>,
@@ -33,6 +36,32 @@ pub struct AppState {
     pub token: String,
     pub root: PathBuf,
     pub backend: String,
+    /// 生成ジョブ（専用スレッドで直列に実行）。
+    pub jobs: Arc<JobManager>,
+    /// 合成エンジン（本物か、テスト用の擬似）。
+    pub synth: Arc<dyn Synthesizer>,
+}
+
+impl AppState {
+    /// 資産の登録簿と生成ジョブを新しく作って組み立てる。
+    pub fn new(
+        store: Arc<Store>,
+        root: PathBuf,
+        token: String,
+        backend: String,
+        synth: Arc<dyn Synthesizer>,
+    ) -> AppState {
+        let jobs = Arc::new(JobManager::new(Arc::clone(&store), Arc::clone(&synth)));
+        AppState {
+            store,
+            assets: Arc::new(Assets::new()),
+            token,
+            root,
+            backend,
+            jobs,
+            synth,
+        }
+    }
 }
 
 fn no_store(mut response: Response) -> Response {

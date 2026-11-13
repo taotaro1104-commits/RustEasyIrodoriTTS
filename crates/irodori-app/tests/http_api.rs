@@ -488,8 +488,6 @@ async fn audio_download_uses_a_safe_filename() {
 async fn unimplemented_routes_return_501_json() {
     let f = fixture();
     for uri in [
-        "/api/generate",
-        "/api/stop",
         "/api/voice",
         "/api/voice/delete",
         "/api/voice/rename",
@@ -502,7 +500,6 @@ async fn unimplemented_routes_return_501_json() {
         "/api/cleanup-preview",
         "/api/choose-folder",
         "/api/open-output",
-        "/api/unload",
         "/api/design",
         "/api/design-registration",
         "/api/input-data/save",
