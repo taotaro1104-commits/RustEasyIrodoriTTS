@@ -10,3 +10,4 @@ pub mod py_json;
 pub(crate) mod testutil;
 
 pub use error::{Result, StoreError};
+pub use storage::{ProjectSummary, Store};
