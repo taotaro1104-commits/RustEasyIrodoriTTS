@@ -3,6 +3,7 @@ pub mod error;
 pub mod config;
 pub mod golden;
 pub mod loader;
+pub mod nn;
 pub mod normalize;
 pub mod text_tokenizer;
 
