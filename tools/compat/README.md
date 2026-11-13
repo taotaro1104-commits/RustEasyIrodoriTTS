@@ -55,3 +55,8 @@ cargo test -p irodori-store --test compat_roundtrip -- --ignored
 | `rust_written_folder_is_readable_by_python` | `verify_python_reads.py` が、Rust の書いたフォルダを v2.0 の `Store` で読み直して検証する |
 
 最後に確認した結果: 4 件すべて成功（2026-11-14、Python 3.11.3）。`verify_python_reads.py` は単独でも動く（フォルダに `compat_rust_expect.json` が必要）。
+
+## M2b-2 の fixture
+| fixture | 内容 |
+|---|---|
+| `voice_ops_cases` | v2.0 の `easy_voices.save_voice/rename_voice/delete_voice` を順に呼んだ結果（各手順後の `voices/index.json`、またはエラー文）。話者 ID は別名（alias）、WAV は秒数だけ。`uv run --python 3.11 --with regex python ..\RustEasyIrodoriTTS\tools\compat\gen_fixtures.py --out ... --only voice_ops_cases` |

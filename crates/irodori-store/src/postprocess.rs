@@ -91,6 +91,47 @@ pub fn add_silence(source: &Path, seconds: f64) -> Result<PathBuf> {
     Ok(target)
 }
 
+fn unreadable_format() -> StoreError {
+    StoreError::Invalid("音声を読み込めません。形式を確認してください。".into())
+}
+
+/// WAV の長さ（秒）。読めなければ「形式を確認してください」。
+pub fn wav_seconds(path: &Path) -> Result<f64> {
+    let reader = hound::WavReader::open(path).map_err(|_| unreadable_format())?;
+    let spec = reader.spec();
+    if spec.sample_rate == 0 {
+        return Err(unreadable_format());
+    }
+    Ok(f64::from(reader.duration()) / f64::from(spec.sample_rate))
+}
+
+/// WAV を、同じレート・チャンネル数の 24bit PCM にして `dst` へ書く（v2.0 の `sf.write(..., subtype='PCM_24')`）。
+/// 戻り値は秒数。失敗したら `dst` は残さない。
+pub fn copy_as_pcm24(src: &Path, dst: &Path) -> Result<f64> {
+    let mut reader = hound::WavReader::open(src).map_err(|_| unreadable_format())?;
+    let spec = reader.spec();
+    let samples = read_as_24bit(&mut reader).map_err(|_| unreadable_format())?;
+    let out_spec = hound::WavSpec {
+        channels: spec.channels,
+        sample_rate: spec.sample_rate,
+        bits_per_sample: 24,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let written = (|| -> std::result::Result<(), hound::Error> {
+        let mut writer = hound::WavWriter::create(dst, out_spec)?;
+        for s in &samples {
+            writer.write_sample(*s)?;
+        }
+        writer.finalize()
+    })();
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(dst);
+        return Err(StoreError::from(std::io::Error::other(e)));
+    }
+    let frames = samples.len() / usize::from(spec.channels.max(1));
+    Ok(frames as f64 / f64::from(spec.sample_rate))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

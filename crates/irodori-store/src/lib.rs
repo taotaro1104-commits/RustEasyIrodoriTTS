@@ -14,6 +14,7 @@ pub mod splitter;
 pub mod state;
 pub mod storage;
 pub mod unicode_tables;
+pub mod voices;
 
 #[cfg(test)]
 pub(crate) mod testutil;

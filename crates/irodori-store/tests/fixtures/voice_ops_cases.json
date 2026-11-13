@@ -1,0 +1,1036 @@
+{
+  "initial": [
+    {
+      "id": "11111111111111111111111111111111",
+      "revision": 4,
+      "audio": "voices/11111111111111111111111111111111/old.wav",
+      "name": "旧話者",
+      "model": "Aratako/Irodori-TTS-v4.1-Small",
+      "caption": "旧",
+      "future_voice_field": {
+        "keep": [
+          1,
+          2
+        ]
+      }
+    }
+  ],
+  "wavs": {
+    "w1": 2.0,
+    "short": 0.5
+  },
+  "steps": [
+    {
+      "step": {
+        "op": "rename",
+        "alias": "legacy",
+        "revision": "current",
+        "values": {
+          "name": "改名した旧話者"
+        }
+      },
+      "error": null,
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 5,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "旧",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 4
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "save",
+        "alias": "legacy",
+        "revision": "current",
+        "values": {
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明"
+        }
+      },
+      "error": null,
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "save",
+        "alias": "a",
+        "values": {
+          "name": "話者A",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "落ち着いた声",
+          "creation": {
+            "mode": "design"
+          }
+        },
+        "wav": "w1"
+      },
+      "error": null,
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "a",
+          "revision": 1,
+          "audio": "voices/a/*.wav",
+          "name": "話者A",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "落ち着いた声",
+          "sound_revision": 1,
+          "creation": {
+            "mode": "design"
+          }
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "save",
+        "alias": "a",
+        "revision": "current",
+        "values": {
+          "name": "話者A",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "明るい声"
+        }
+      },
+      "error": null,
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "a",
+          "revision": 2,
+          "audio": "voices/a/*.wav",
+          "name": "話者A",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "明るい声",
+          "sound_revision": 2,
+          "creation": {
+            "mode": "design"
+          }
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "save",
+        "alias": "a",
+        "revision": "current",
+        "values": {
+          "name": "  話者A改  ",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        },
+        "wav": "w1"
+      },
+      "error": null,
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "a",
+          "revision": 3,
+          "audio": "voices/a/*.wav",
+          "name": "話者A改",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "sound_revision": 3,
+          "creation": {
+            "mode": "design"
+          }
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "rename",
+        "alias": "a",
+        "revision": "current",
+        "values": {
+          "name": "話者A改"
+        }
+      },
+      "error": null,
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "a",
+          "revision": 3,
+          "audio": "voices/a/*.wav",
+          "name": "話者A改",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "sound_revision": 3,
+          "creation": {
+            "mode": "design"
+          }
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "rename",
+        "alias": "a",
+        "revision": "current",
+        "values": {
+          "name": "新名"
+        }
+      },
+      "error": null,
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "a",
+          "revision": 4,
+          "audio": "voices/a/*.wav",
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "sound_revision": 3,
+          "creation": {
+            "mode": "design"
+          }
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "save",
+        "alias": "b",
+        "values": {
+          "name": "話者B",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": ""
+        },
+        "wav": "w1"
+      },
+      "error": null,
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "a",
+          "revision": 4,
+          "audio": "voices/a/*.wav",
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "sound_revision": 3,
+          "creation": {
+            "mode": "design"
+          }
+        },
+        {
+          "id": "b",
+          "revision": 1,
+          "audio": "voices/b/*.wav",
+          "name": "話者B",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "save",
+        "alias": "a",
+        "revision": "current",
+        "values": {
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": ""
+        }
+      },
+      "error": null,
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "b",
+          "revision": 1,
+          "audio": "voices/b/*.wav",
+          "name": "話者B",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        },
+        {
+          "id": "a",
+          "revision": 5,
+          "audio": "voices/a/*.wav",
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 5,
+          "creation": {
+            "mode": "design"
+          }
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "save",
+        "alias": "a",
+        "revision": "stale",
+        "values": {
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF"
+        }
+      },
+      "error": "話者が更新されています。一覧から読み直してください。",
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "b",
+          "revision": 1,
+          "audio": "voices/b/*.wav",
+          "name": "話者B",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        },
+        {
+          "id": "a",
+          "revision": 5,
+          "audio": "voices/a/*.wav",
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 5,
+          "creation": {
+            "mode": "design"
+          }
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "save",
+        "alias": "c",
+        "values": {
+          "name": "音声なし",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF"
+        }
+      },
+      "error": "参照音声を追加するか、生成した候補を選んでください。",
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "b",
+          "revision": 1,
+          "audio": "voices/b/*.wav",
+          "name": "話者B",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        },
+        {
+          "id": "a",
+          "revision": 5,
+          "audio": "voices/a/*.wav",
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 5,
+          "creation": {
+            "mode": "design"
+          }
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "save",
+        "alias": "c",
+        "values": {
+          "name": "モデル不正",
+          "model": "evil/model"
+        },
+        "wav": "w1"
+      },
+      "error": "使用するモデルを選んでください。",
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "b",
+          "revision": 1,
+          "audio": "voices/b/*.wav",
+          "name": "話者B",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        },
+        {
+          "id": "a",
+          "revision": 5,
+          "audio": "voices/a/*.wav",
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 5,
+          "creation": {
+            "mode": "design"
+          }
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "save",
+        "alias": "c",
+        "values": {
+          "name": "あああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF"
+        },
+        "wav": "w1"
+      },
+      "error": "話者名を1～80文字で入力してください。",
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "b",
+          "revision": 1,
+          "audio": "voices/b/*.wav",
+          "name": "話者B",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        },
+        {
+          "id": "a",
+          "revision": 5,
+          "audio": "voices/a/*.wav",
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 5,
+          "creation": {
+            "mode": "design"
+          }
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "save",
+        "alias": "c",
+        "values": {
+          "name": "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF"
+        },
+        "wav": "w1"
+      },
+      "error": null,
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "b",
+          "revision": 1,
+          "audio": "voices/b/*.wav",
+          "name": "話者B",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        },
+        {
+          "id": "a",
+          "revision": 5,
+          "audio": "voices/a/*.wav",
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 5,
+          "creation": {
+            "mode": "design"
+          }
+        },
+        {
+          "id": "c",
+          "revision": 1,
+          "audio": "voices/c/*.wav",
+          "name": "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "save",
+        "alias": "d",
+        "values": {
+          "name": "   ",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF"
+        },
+        "wav": "w1"
+      },
+      "error": "話者名を1～80文字で入力してください。",
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "b",
+          "revision": 1,
+          "audio": "voices/b/*.wav",
+          "name": "話者B",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        },
+        {
+          "id": "a",
+          "revision": 5,
+          "audio": "voices/a/*.wav",
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 5,
+          "creation": {
+            "mode": "design"
+          }
+        },
+        {
+          "id": "c",
+          "revision": 1,
+          "audio": "voices/c/*.wav",
+          "name": "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "save",
+        "alias": "d",
+        "values": {
+          "name": "短い",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF"
+        },
+        "wav": "short"
+      },
+      "error": "参照音声は1～120秒にしてください。",
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "b",
+          "revision": 1,
+          "audio": "voices/b/*.wav",
+          "name": "話者B",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        },
+        {
+          "id": "a",
+          "revision": 5,
+          "audio": "voices/a/*.wav",
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 5,
+          "creation": {
+            "mode": "design"
+          }
+        },
+        {
+          "id": "c",
+          "revision": 1,
+          "audio": "voices/c/*.wav",
+          "name": "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "save",
+        "alias": "ghost",
+        "revision": "current",
+        "values": {
+          "name": "幽霊",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF"
+        },
+        "wav": "w1"
+      },
+      "error": "編集対象の話者が見つかりません。",
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "b",
+          "revision": 1,
+          "audio": "voices/b/*.wav",
+          "name": "話者B",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        },
+        {
+          "id": "a",
+          "revision": 5,
+          "audio": "voices/a/*.wav",
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 5,
+          "creation": {
+            "mode": "design"
+          }
+        },
+        {
+          "id": "c",
+          "revision": 1,
+          "audio": "voices/c/*.wav",
+          "name": "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "rename",
+        "alias": "ghost",
+        "revision": "current",
+        "values": {
+          "name": "幽霊"
+        }
+      },
+      "error": "話者が見つかりません。選び直してください。",
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "b",
+          "revision": 1,
+          "audio": "voices/b/*.wav",
+          "name": "話者B",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        },
+        {
+          "id": "a",
+          "revision": 5,
+          "audio": "voices/a/*.wav",
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 5,
+          "creation": {
+            "mode": "design"
+          }
+        },
+        {
+          "id": "c",
+          "revision": 1,
+          "audio": "voices/c/*.wav",
+          "name": "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "rename",
+        "alias": "b",
+        "revision": "stale",
+        "values": {
+          "name": "B2"
+        }
+      },
+      "error": "話者が更新されています。一覧から読み直してください。",
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "b",
+          "revision": 1,
+          "audio": "voices/b/*.wav",
+          "name": "話者B",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        },
+        {
+          "id": "a",
+          "revision": 5,
+          "audio": "voices/a/*.wav",
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 5,
+          "creation": {
+            "mode": "design"
+          }
+        },
+        {
+          "id": "c",
+          "revision": 1,
+          "audio": "voices/c/*.wav",
+          "name": "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "delete",
+        "alias": "b"
+      },
+      "error": null,
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "a",
+          "revision": 5,
+          "audio": "voices/a/*.wav",
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 5,
+          "creation": {
+            "mode": "design"
+          }
+        },
+        {
+          "id": "c",
+          "revision": 1,
+          "audio": "voices/c/*.wav",
+          "name": "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        }
+      ]
+    },
+    {
+      "step": {
+        "op": "delete",
+        "alias": "ghost"
+      },
+      "error": null,
+      "index": [
+        {
+          "id": "legacy",
+          "revision": 6,
+          "audio": "voices/legacy/old.wav",
+          "name": "改名した旧話者",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "caption": "新しい説明",
+          "future_voice_field": {
+            "keep": [
+              1,
+              2
+            ]
+          },
+          "sound_revision": 6
+        },
+        {
+          "id": "a",
+          "revision": 5,
+          "audio": "voices/a/*.wav",
+          "name": "新名",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 5,
+          "creation": {
+            "mode": "design"
+          }
+        },
+        {
+          "id": "c",
+          "revision": 1,
+          "audio": "voices/c/*.wav",
+          "name": "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ",
+          "model": "Aratako/Irodori-TTS-v4.1-Small-MF",
+          "caption": "",
+          "sound_revision": 1
+        }
+      ]
+    }
+  ]
+}

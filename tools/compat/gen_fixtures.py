@@ -122,6 +122,99 @@ def voices_sample() -> list[dict]:
     ]
 
 
+@fixture("voice_ops_cases")
+def voice_ops_cases() -> dict:
+    """M2b-2: `easy_voices.save_voice/rename_voice/delete_voice` を順に呼んだときの `voices/index.json`。
+
+    話者の ID は実行ごとに変わるので別名（alias）で書く。`audio` は `voices/<alias>/*.wav` に正規化する。
+    WAV は秒数だけ書き、テスト側が同じ長さの正弦波で作る（24 kHz・モノラル）。
+    """
+    import tempfile
+
+    import numpy as np
+    import soundfile as sf
+    from easy_storage import Store, atomic_json
+    from easy_voices import delete_voice, rename_voice, save_voice
+
+    small, mf = "Aratako/Irodori-TTS-v4.1-Small", "Aratako/Irodori-TTS-v4.1-Small-MF"
+    legacy_id = "1" * 32
+    legacy = dict(id=legacy_id, revision=4, audio=f"voices/{legacy_id}/old.wav", name="旧話者", model=small,
+                  caption="旧", future_voice_field={"keep": [1, 2]})
+    wavs = {"w1": 2.0, "short": 0.5}
+    steps = [
+        dict(op="rename", alias="legacy", revision="current", values=dict(name="改名した旧話者")),
+        dict(op="save", alias="legacy", revision="current", values=dict(name="改名した旧話者", model=small, caption="新しい説明")),
+        dict(op="save", alias="a", values=dict(name="話者A", model=small, caption="落ち着いた声", creation=dict(mode="design")), wav="w1"),
+        dict(op="save", alias="a", revision="current", values=dict(name="話者A", model=small, caption="明るい声")),
+        dict(op="save", alias="a", revision="current", values=dict(name="  話者A改  ", model=mf, caption="x" * 2100), wav="w1"),
+        dict(op="rename", alias="a", revision="current", values=dict(name="話者A改")),
+        dict(op="rename", alias="a", revision="current", values=dict(name="新名")),
+        dict(op="save", alias="b", values=dict(name="話者B", model=mf, caption=""), wav="w1"),
+        dict(op="save", alias="a", revision="current", values=dict(name="新名", model=mf, caption="")),
+        dict(op="save", alias="a", revision="stale", values=dict(name="新名", model=mf)),
+        dict(op="save", alias="c", values=dict(name="音声なし", model=mf)),
+        dict(op="save", alias="c", values=dict(name="モデル不正", model="evil/model"), wav="w1"),
+        dict(op="save", alias="c", values=dict(name="あ" * 81, model=mf), wav="w1"),
+        dict(op="save", alias="c", values=dict(name="あ" * 80, model=mf), wav="w1"),
+        dict(op="save", alias="d", values=dict(name="   ", model=mf), wav="w1"),
+        dict(op="save", alias="d", values=dict(name="短い", model=mf), wav="short"),
+        dict(op="save", alias="ghost", revision="current", values=dict(name="幽霊", model=mf), wav="w1"),
+        dict(op="rename", alias="ghost", revision="current", values=dict(name="幽霊")),
+        dict(op="rename", alias="b", revision="stale", values=dict(name="B2")),
+        dict(op="delete", alias="b"),
+        dict(op="delete", alias="ghost"),
+    ]
+
+    def normalize(voices, ids):
+        by_id = {v: k for k, v in ids.items()}
+        out = []
+        for voice in voices:
+            alias = by_id.get(voice["id"], voice["id"])
+            item = dict(voice, id=alias)
+            item["audio"] = f"voices/{alias}/*.wav" if not voice["audio"].endswith("old.wav") else f"voices/{alias}/old.wav"
+            out.append(item)
+        return out
+
+    results = []
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        atomic_json(root / "voices/index.json", [legacy])
+        store = Store(root)
+        ids = {"legacy": legacy_id, "ghost": "f" * 32}
+        for step in steps:
+            alias, values = step["alias"], dict(step.get("values", {}))
+            current = next((v for v in store.voices if v["id"] == ids.get(alias)), None)
+            if alias in ids:
+                values["id"] = ids[alias]
+            if step.get("revision") == "current" and current:
+                values["revision"] = current["revision"]
+            elif step.get("revision") == "stale":
+                values["revision"] = (current["revision"] - 1) if current else 0
+            elif step.get("revision") == "current":
+                values["revision"] = 1
+            record = dict(step=step, error=None)
+            try:
+                if step["op"] == "delete":
+                    delete_voice(store, ids.get(alias, alias))
+                elif step["op"] == "rename":
+                    rename_voice(store, values)
+                else:
+                    source = None
+                    if step.get("wav"):
+                        seconds = wavs[step["wav"]]
+                        source = root / "temp" / f"{step['wav']}.wav"
+                        source.parent.mkdir(parents=True, exist_ok=True)
+                        tone = (0.3 * np.sin(2 * np.pi * 440 * np.arange(int(24000 * seconds)) / 24000)).astype(np.float32)
+                        sf.write(source, tone, 24000, subtype="PCM_16")
+                    saved = save_voice(store, values, source)
+                    ids.setdefault(alias, saved["id"])
+            except ValueError as exc:
+                record["error"] = str(exc)
+            record["index"] = normalize(store.voices, ids)
+            results.append(record)
+    return dict(initial=[legacy], wavs=wavs, steps=results)
+
+
 @fixture("settings_sample")
 def settings_sample() -> dict:
     """Task 3: 既定値（v2.0 の `Store`）＋保存された値＋将来の未知フィールド。"""
