@@ -60,3 +60,4 @@ cargo test -p irodori-store --test compat_roundtrip -- --ignored
 | fixture | 内容 |
 |---|---|
 | `voice_ops_cases` | v2.0 の `easy_voices.save_voice/rename_voice/delete_voice` を順に呼んだ結果（各手順後の `voices/index.json`、またはエラー文）。話者 ID は別名（alias）、WAV は秒数だけ。`uv run --python 3.11 --with regex python ..\RustEasyIrodoriTTS\tools\compat\gen_fixtures.py --out ... --only voice_ops_cases` |
+| （手動）`check_voices.py` | Rust 版が書いたデータフォルダを v2.0 の `Store`／`Service.result_matches` で読み直し、話者の WAV と署名の一致を確認する。`uv run --python 3.11 --with regex python ..\RustEasyIrodoriTTS\tools\compat\check_voices.py <データフォルダ>` |
