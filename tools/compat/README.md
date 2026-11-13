@@ -21,5 +21,14 @@ uv run python ..\RustEasyIrodoriTTS\tools\compat\gen_fixtures.py --out ..\RustEa
 | `splitter_cases`, `dictionary_cases` | 6 | 分割・推定時間・辞書置換 |
 | `signature_cases` | 7 | 生成結果の署名（**互換の最重要項目**） |
 
+## 画面のメタ情報（Task 10）
+`gen_meta.py` が `crates/irodori-app/data/{emoji_palette.json,credits.md}` を作る（上流の絵文字一覧・v2.0 のグループ・クレジット文）。
+上流のリポジトリで実行する:
+```powershell
+cd F:\claude\upstream-irodori
+uv run --python 3.11 --with regex python ..\RustEasyIrodoriTTS\tools\compat\gen_meta.py --out ..\RustEasyIrodoriTTS\crates\irodori-app\data
+```
+クレジット（制作者表記・ライセンス・禁止事項）は画面から消さない。
+
 ## 往復テスト（Task 13）
 `--make-data-dir <dir>` で v2.0 の `Store` が実データを作り、Rust が読み書きした後、`verify_python_reads.py` で Python が読み直す。
