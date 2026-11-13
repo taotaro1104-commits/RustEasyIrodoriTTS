@@ -54,6 +54,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/", get(index))
         .route("/editor/{name}", get(editor_file))
         .route("/api/meta", get(meta::meta))
+        // ブラウザが自動で取りに来る。無いことを 404 にすると、画面のコンソールにエラーとして残る。
+        .route("/favicon.ico", get(|| async { StatusCode::NO_CONTENT }))
         .merge(routes::routes())
         .layer(middleware::from_fn_with_state(
             state.clone(),

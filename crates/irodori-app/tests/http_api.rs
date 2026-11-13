@@ -515,3 +515,15 @@ async fn unimplemented_routes_return_501_json() {
     let r = get(&f.app, "/bundle/abc").await;
     assert_eq!(r.status, StatusCode::NOT_IMPLEMENTED);
 }
+
+#[tokio::test]
+async fn favicon_request_is_answered_quietly() {
+    let f = fixture();
+    let r = get(&f.app, "/favicon.ico").await;
+    assert_eq!(
+        r.status,
+        StatusCode::NO_CONTENT,
+        "browsers ask for it automatically; a 404 shows up as a console error"
+    );
+    assert!(r.body.is_empty());
+}
