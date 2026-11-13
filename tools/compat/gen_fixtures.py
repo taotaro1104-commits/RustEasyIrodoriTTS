@@ -189,6 +189,99 @@ def dictionary_cases() -> list[dict]:
     return cases
 
 
+@fixture("signature_cases")
+def signature_cases() -> dict:
+    """Task 7: `Service.signature / result_matches / playback_stamp`（v2.0 の実コード）。"""
+    import copy
+    import os
+    import tempfile
+    from easy_service import Service
+    from easy_storage import Store, new_card, new_project
+
+    service = Service.__new__(Service)  # エンジンは不要。署名は純粋関数＋話者一覧だけを使う
+    tmp = tempfile.mkdtemp()
+    service.store = Store(tmp)
+    voices = voices_sample()
+    service.store.voices = copy.deepcopy(voices)
+    vid_a, vid_b = voices[0]["id"], voices[1]["id"]
+    dicts = [{}, {"Irodori": "いろどり", "TTS": "てぃーてぃーえす"}, {"日本": "にほん", "日本橋": "にほんばし"}]
+    generations = [
+        {},
+        {"steps": 4, "seed": 123, "duration_scale": 1.25},
+        {"lora_adapter": "x/ y", "context_kv_cache": False, "cfg_min_t": 0.25},
+        {"model_precision": "bf16", "truncation_factor": 0.9, "rescale_k": 1.5, "rescale_sigma": 0.5},
+    ]
+    texts = ["", "こんにちは。", "Irodori TTS で 日本橋 へ", "😀 emoji 👨‍👩‍👧‍👦", 'quote " and \\ back\nslash\t']
+    cases = []
+    for text in texts:
+        for voice_id in ("", vid_a, vid_b, "0" * 32):
+            for speed, silence in ((1.0, 0.0), (0.75, 1.5), (1.5, 10.0)):
+                for g, extra in enumerate(generations):
+                    dictionary = dicts[(len(cases)) % 3]
+                    enabled = len(cases) % 4 != 3
+                    project = new_project("x")
+                    project["dictionary_enabled"] = enabled
+                    project["generation"] = service_generation(project["generation"], extra)
+                    card = project["cards"][0]
+                    card.update(text=text, voice_id=voice_id, speed=speed, silence=silence)
+                    reading = service.reading_text(project, card, dictionary)
+                    sig = service.signature(project, card, dictionary)
+                    old_rules = dicts[1]
+                    legacy_sig = service.input_signature(project, card, old_rules)
+                    cases.append(dict(
+                        project=project, dictionary=dictionary, reading=reading, signature=sig,
+                        matches_current=_matches(service, project, card, dictionary, dict(signature=sig)),
+                        legacy=dict(
+                            signature=legacy_sig,
+                            request=dict(dictionary=old_rules, text=reading),
+                            matches=_matches(service, project, card, dictionary, dict(signature=legacy_sig, request=dict(dictionary=old_rules, text=reading))),
+                        ),
+                        legacy_wrong_text=dict(
+                            signature=legacy_sig,
+                            request=dict(dictionary=old_rules, text=reading + "x"),
+                            matches=_matches(service, project, card, dictionary, dict(signature=legacy_sig, request=dict(dictionary=old_rules, text=reading + "x"))),
+                        ),
+                        stale=dict(signature="0" * 64, matches=_matches(service, project, card, dictionary, dict(signature="0" * 64))),
+                    ))
+    cases = cases[::3]  # 約 80 件に間引く（組み合わせを偏らせない）
+    # 再生スタンプ: 日本語のパス・状態・存在するファイル／しないファイル
+    stamps = []
+    cwd = os.getcwd()
+    workdir = tempfile.mkdtemp()
+    os.chdir(workdir)
+    try:
+        for dictionary in dicts:
+            project = new_project("スタンプ")
+            base = project["cards"][0]
+            base.update(text="一枚目", voice_id=vid_a)
+            c2, c3, c4 = new_card(base), new_card(base), new_card(base)
+            c2.update(text="二枚目", status="生成中")
+            c3.update(text="三枚目", status="失敗", result=dict(path="outputs/internal/日本語/03.wav", signature="s"))
+            c4.update(text="Irodori", status="完了", result=dict(path="outputs/internal/r/04.wav", signature="s"))
+            base.update(status="完了", result=dict(path="outputs/internal/r/01.wav", signature="s"))
+            project["cards"] += [c2, c3, c4]
+            existing = ["outputs/internal/r/01.wav"]
+            for rel in existing:
+                os.makedirs(os.path.dirname(rel), exist_ok=True)
+                open(rel, "wb").close()
+            stamps.append(dict(project=project, dictionary=dictionary, voices=voices, existing=existing,
+                               stamp=service.playback_stamp(project, dictionary)))
+    finally:
+        os.chdir(cwd)
+    return dict(voices=voices, cases=cases, stamps=stamps)
+
+
+def service_generation(base: dict, overrides: dict) -> dict:
+    out = dict(base)
+    out.update(overrides)
+    return out
+
+
+def _matches(service, project, card, dictionary, result) -> bool:
+    card = dict(card, result=result)
+    return bool(service.result_matches(project, card, dictionary))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, required=True)

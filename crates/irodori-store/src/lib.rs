@@ -5,6 +5,7 @@ pub mod generation;
 pub mod history;
 pub mod model;
 pub mod py_json;
+pub mod signature;
 pub mod splitter;
 pub mod storage;
 pub mod unicode_tables;
