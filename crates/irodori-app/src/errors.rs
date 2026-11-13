@@ -25,7 +25,7 @@ impl IntoResponse for ApiError {
         let message = match &self.0 {
             // 想定外の失敗は詳細をログにだけ残し、画面には決まった文を返す。
             StoreError::Internal(detail) => {
-                eprintln!("Editor operation failed: {detail}");
+                tracing::error!("Editor operation failed: {detail}");
                 INTERNAL_MESSAGE.to_string()
             }
             other => other.message().to_string(),

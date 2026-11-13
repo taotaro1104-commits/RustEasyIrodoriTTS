@@ -2,6 +2,8 @@
 
 pub mod assets_embed;
 pub mod errors;
+pub mod launch;
+pub mod logging;
 pub mod meta;
 pub mod routes;
 pub mod security;
@@ -57,5 +59,6 @@ pub fn build_router(state: AppState) -> Router {
             state.clone(),
             security::local_only,
         ))
+        .layer(middleware::from_fn(logging::access_log))
         .with_state(state)
 }
