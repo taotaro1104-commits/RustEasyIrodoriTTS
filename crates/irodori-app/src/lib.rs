@@ -3,6 +3,7 @@
 pub mod assets_embed;
 pub mod errors;
 pub mod meta;
+pub mod routes;
 pub mod security;
 
 use std::path::PathBuf;
@@ -51,6 +52,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/", get(index))
         .route("/editor/{name}", get(editor_file))
         .route("/api/meta", get(meta::meta))
+        .merge(routes::routes())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             security::local_only,

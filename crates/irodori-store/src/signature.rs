@@ -86,7 +86,8 @@ pub fn result_matches(
             == Some(&Value::String(reading_text(doc, card, dict)))
 }
 
-pub(crate) fn is_falsy(v: &Value) -> bool {
+/// Python の真偽（空・0・null は偽）。
+pub fn is_falsy(v: &Value) -> bool {
     match v {
         Value::Null => true,
         Value::Bool(b) => !b,

@@ -290,6 +290,23 @@ impl Store {
         inner.write_settings()
     }
 
+    /// 前回の入力を復元する元の台本（`settings.recovery_project`）。`None` で消す。
+    pub fn set_recovery_project(&self, pid: Option<&str>) -> Result<()> {
+        let mut inner = self.lock();
+        match pid {
+            Some(id) => {
+                inner
+                    .settings
+                    .extra
+                    .insert("recovery_project".into(), Value::String(id.to_string()));
+            }
+            None => {
+                inner.settings.extra.remove("recovery_project");
+            }
+        }
+        inner.write_settings()
+    }
+
     pub fn list_projects(&self) -> Vec<ProjectSummary> {
         let dir = self.root.join("projects");
         let mut paths: Vec<PathBuf> = match std::fs::read_dir(&dir) {
