@@ -157,7 +157,7 @@ mod tests {
         .unwrap();
         let g = crate::golden::load("tokens").unwrap();
         let (ids, mask) = tok.batch_encode(&["こんにちは、世界。", "短い"], 32).unwrap();
-        assert_eq!(ids.to_vec2::<u32>().unwrap(), g["ids"].to_vec2::<u32>().unwrap());
+        assert_eq!(ids.to_vec2::<u32>().unwrap(), g["ids"].to_dtype(candle_core::DType::U32).unwrap().to_vec2::<u32>().unwrap());
         assert_eq!(mask.to_vec2::<u8>().unwrap(), g["mask"].to_vec2::<u8>().unwrap());
     }
 }
