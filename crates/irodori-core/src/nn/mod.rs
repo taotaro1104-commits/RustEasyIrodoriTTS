@@ -56,6 +56,27 @@ pub(crate) mod test_util {
         Tensor::from_slice(v, shape, &Device::Cpu).unwrap()
     }
 
+    /// 名前から決まる決定的な擬似乱数重み。名前に `norm` を含むものは 1 付近。
+    pub fn fake_tensor(name: &str, shape: &[usize]) -> Tensor {
+        let n: usize = shape.iter().product();
+        let seed = name.bytes().map(|b| b as f32).sum::<f32>();
+        let norm = name.contains("norm");
+        let v: Vec<f32> = (0..n)
+            .map(|k| {
+                let s = (0.83 * k as f32 + seed).sin();
+                if norm { 1.0 + 0.1 * s } else { 0.25 * s }
+            })
+            .collect();
+        Tensor::from_vec(v, shape.to_vec(), &Device::Cpu).unwrap()
+    }
+
+    /// `(テンソル名, 形状)` の一覧から合成 VarBuilder を作る。
+    pub fn vb_from_spec(spec: Vec<(String, Vec<usize>)>) -> VarBuilder<'static> {
+        let map: HashMap<String, Tensor> =
+            spec.into_iter().map(|(n, s)| { let t = fake_tensor(&n, &s); (n, t) }).collect();
+        VarBuilder::from_tensors(map, DType::F32, &Device::Cpu)
+    }
+
     pub fn zeros(r: usize, c: usize) -> Tensor {
         Tensor::zeros((r, c), DType::F32, &Device::Cpu).unwrap()
     }
