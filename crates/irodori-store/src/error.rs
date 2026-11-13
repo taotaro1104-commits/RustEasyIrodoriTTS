@@ -23,7 +23,10 @@ pub type Result<T> = std::result::Result<T, StoreError>;
 impl StoreError {
     pub fn message(&self) -> &str {
         match self {
-            StoreError::Invalid(m) | StoreError::Conflict(m) | StoreError::Io(m) | StoreError::Internal(m) => m,
+            StoreError::Invalid(m)
+            | StoreError::Conflict(m)
+            | StoreError::Io(m)
+            | StoreError::Internal(m) => m,
         }
     }
 
@@ -38,7 +41,10 @@ impl StoreError {
 
 impl From<std::io::Error> for StoreError {
     fn from(_: std::io::Error) -> Self {
-        StoreError::Io("ファイルを読み書きできません。保存先の接続・空き容量・アクセス権を確認してください。".into())
+        StoreError::Io(
+            "ファイルを読み書きできません。保存先の接続・空き容量・アクセス権を確認してください。"
+                .into(),
+        )
     }
 }
 
@@ -56,7 +62,10 @@ mod tests {
 
     #[test]
     fn message_returns_the_original_text() {
-        assert_eq!(StoreError::Conflict("台本が更新されています。".into()).message(), "台本が更新されています。");
+        assert_eq!(
+            StoreError::Conflict("台本が更新されています。".into()).message(),
+            "台本が更新されています。"
+        );
         assert_eq!(StoreError::Invalid("a".into()).to_string(), "a");
     }
 

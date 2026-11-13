@@ -13,6 +13,7 @@ uuid.workspace = true
 regex.workspace = true
 unicode-segmentation.workspace = true
 ryu.workspace = true
+indexmap.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

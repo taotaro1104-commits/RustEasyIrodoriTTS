@@ -41,14 +41,22 @@ pub fn float_repr(x: f64) -> String {
     let (digits, decpt) = shortest_digits(x.abs());
     let body = if decpt <= -4 || decpt > 16 {
         let exp = decpt - 1;
-        let mant = if digits.len() > 1 { format!("{}.{}", &digits[..1], &digits[1..]) } else { digits.clone() };
+        let mant = if digits.len() > 1 {
+            format!("{}.{}", &digits[..1], &digits[1..])
+        } else {
+            digits.clone()
+        };
         format!("{mant}e{}{:02}", if exp < 0 { '-' } else { '+' }, exp.abs())
     } else if decpt <= 0 {
         format!("0.{}{digits}", "0".repeat((-decpt) as usize))
     } else if decpt as usize >= digits.len() {
         format!("{digits}{}.0", "0".repeat(decpt as usize - digits.len()))
     } else {
-        format!("{}.{}", &digits[..decpt as usize], &digits[decpt as usize..])
+        format!(
+            "{}.{}",
+            &digits[..decpt as usize],
+            &digits[decpt as usize..]
+        )
     };
     format!("{sign}{body}")
 }
@@ -58,7 +66,9 @@ pub fn float_repr_checked(x: f64) -> Result<String> {
     if x.is_finite() {
         Ok(float_repr(x))
     } else {
-        Err(StoreError::Invalid("保存できない数値（NaN または無限大）が含まれています。".into()))
+        Err(StoreError::Invalid(
+            "保存できない数値（NaN または無限大）が含まれています。".into(),
+        ))
     }
 }
 

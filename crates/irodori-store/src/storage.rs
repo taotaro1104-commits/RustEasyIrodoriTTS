@@ -22,16 +22,26 @@ fn invalid(msg: &str) -> StoreError {
 }
 
 fn corrupt_file(path: &Path) -> StoreError {
-    StoreError::Invalid(format!("保存データを読み込めません。元のファイルは変更していません: {}", path.display()))
+    StoreError::Invalid(format!(
+        "保存データを読み込めません。元のファイルは変更していません: {}",
+        path.display()
+    ))
 }
 
 /// 一時ファイルに書いて fsync し、rename で置き換える。失敗時は一時ファイルを消す。
 pub fn atomic_json(path: &Path, v: &Value) -> Result<()> {
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    atomic_write(path, &dumps_pretty(v)?)
+}
+
+/// 文字列をそのまま原子的に書く（`atomic_json` の土台）。
+pub fn atomic_write(path: &Path, text: &str) -> Result<()> {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let text = dumps_pretty(v)?;
     let tmp = path.with_file_name(format!("{name}.{}.tmp", uid()));
     let result = (|| -> std::io::Result<()> {
         let mut f = std::fs::File::create(&tmp)?;
@@ -53,7 +63,9 @@ pub fn read_json(path: &Path) -> Result<Option<Value>> {
     }
     let bytes = std::fs::read(path).map_err(|_| corrupt_file(path))?;
     let body = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes);
-    serde_json::from_slice(body).map(Some).map_err(|_| corrupt_file(path))
+    serde_json::from_slice(body)
+        .map(Some)
+        .map_err(|_| corrupt_file(path))
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -89,18 +101,30 @@ fn project_path(root: &Path, pid: &str) -> Result<PathBuf> {
 
 fn read_project(path: &Path, pid: &str) -> Result<Project> {
     let value = read_json(path)?;
-    let obj = value.as_ref().and_then(Value::as_object).ok_or_else(|| invalid(CORRUPT_PROJECT))?;
+    let obj = value
+        .as_ref()
+        .and_then(Value::as_object)
+        .ok_or_else(|| invalid(CORRUPT_PROJECT))?;
     if obj.get("schema") != Some(&json!(2)) || obj.get("id").and_then(Value::as_str) != Some(pid) {
         return Err(invalid(CORRUPT_PROJECT));
     }
-    let cards_ok = obj.get("cards").and_then(Value::as_array).is_some_and(|cards| {
-        let ids: Vec<Option<&str>> = cards.iter().map(|c| c.get("id").and_then(Value::as_str)).collect();
-        !ids.is_empty() && ids.iter().all(Option::is_some) && ids.iter().collect::<std::collections::HashSet<_>>().len() == ids.len()
-    });
+    let cards_ok = obj
+        .get("cards")
+        .and_then(Value::as_array)
+        .is_some_and(|cards| {
+            let ids: Vec<Option<&str>> = cards
+                .iter()
+                .map(|c| c.get("id").and_then(Value::as_str))
+                .collect();
+            !ids.is_empty()
+                && ids.iter().all(Option::is_some)
+                && ids.iter().collect::<std::collections::HashSet<_>>().len() == ids.len()
+        });
     if !cards_ok {
         return Err(invalid("台本のカード情報が不正です。"));
     }
-    let mut project: Project = serde_json::from_value(value.unwrap()).map_err(|_| invalid(CORRUPT_PROJECT))?;
+    let mut project: Project =
+        serde_json::from_value(value.unwrap()).map_err(|_| invalid(CORRUPT_PROJECT))?;
     for card in &mut project.cards {
         if card.status == "待機中" || card.status == "生成中" {
             card.status = "中断（再生成できます）".into();
@@ -136,7 +160,8 @@ impl Inner {
     }
 
     pub(crate) fn write_settings(&self) -> Result<()> {
-        let value = serde_json::to_value(&self.settings).map_err(|e| StoreError::Internal(e.to_string()))?;
+        let value = serde_json::to_value(&self.settings)
+            .map_err(|e| StoreError::Internal(e.to_string()))?;
         atomic_json(&self.root.join("config/settings.json"), &value)
     }
 }
@@ -147,11 +172,13 @@ fn settings_invalid() -> StoreError {
 
 fn load_settings(root: &Path) -> Result<Settings> {
     let legacy = root.join("config/backend.txt");
-    let backend = std::fs::read_to_string(&legacy).map(|t| t.trim_start_matches('\u{feff}').trim().to_string()).unwrap_or_else(|_| "cpu".into());
+    let backend = std::fs::read_to_string(&legacy)
+        .map(|t| t.trim_start_matches('\u{feff}').trim().to_string())
+        .unwrap_or_else(|_| "cpu".into());
     let defaults = Settings::defaults(&backend);
     let saved = read_json(&root.join("config/settings.json"))?.unwrap_or_else(|| json!({}));
     let saved = saved.as_object().ok_or_else(settings_invalid)?;
-    if saved.get("schema").map_or(false, |s| s != &json!(2)) {
+    if saved.get("schema").is_some_and(|s| s != &json!(2)) {
         return Err(settings_invalid());
     }
     let mut merged = match serde_json::to_value(&defaults) {
@@ -183,7 +210,10 @@ impl Store {
             projects: HashMap::new(),
             history: History::default(),
         };
-        Ok(Store { root: root.to_path_buf(), inner: Mutex::new(inner) })
+        Ok(Store {
+            root: root.to_path_buf(),
+            inner: Mutex::new(inner),
+        })
     }
 
     pub fn root(&self) -> &Path {
@@ -212,11 +242,19 @@ impl Store {
     }
 
     /// 楽観ロックつき更新。`revision` が合わなければ 409。変更が無ければ何も保存しない。
-    pub fn update(&self, pid: &str, revision: i64, remember: bool, f: &mut dyn FnMut(&mut Project) -> Result<()>) -> Result<Project> {
+    pub fn update(
+        &self,
+        pid: &str,
+        revision: i64,
+        remember: bool,
+        f: &mut dyn FnMut(&mut Project) -> Result<()>,
+    ) -> Result<Project> {
         let mut inner = self.lock();
         let old = inner.load(Some(pid))?;
         if old.revision != revision {
-            return Err(StoreError::Conflict("別の操作で台本が更新されています。保存済みの内容を読み直してください。".into()));
+            return Err(StoreError::Conflict(
+                "別の操作で台本が更新されています。保存済みの内容を読み直してください。".into(),
+            ));
         }
         let mut doc = old.clone();
         f(&mut doc)?;
@@ -248,7 +286,10 @@ impl Store {
     pub fn list_projects(&self) -> Vec<ProjectSummary> {
         let dir = self.root.join("projects");
         let mut paths: Vec<PathBuf> = match std::fs::read_dir(&dir) {
-            Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x == "json")).collect(),
+            Ok(rd) => rd
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| p.extension().is_some_and(|x| x == "json"))
+                .collect(),
             Err(_) => return Vec::new(),
         };
         paths.sort();
@@ -256,7 +297,10 @@ impl Store {
             .iter()
             .filter_map(|p| {
                 let v = read_json(p).ok()??;
-                Some(ProjectSummary { id: v.get("id")?.as_str()?.to_string(), name: v.get("name")?.as_str()?.to_string() })
+                Some(ProjectSummary {
+                    id: v.get("id")?.as_str()?.to_string(),
+                    name: v.get("name")?.as_str()?.to_string(),
+                })
             })
             .collect()
     }
@@ -265,7 +309,15 @@ impl Store {
         let mut inner = self.lock();
         let mut result = inner.settings.clone();
         let get = |k: &str| values.get(k);
-        for key in ["auto_browser", "restore_input", "inherit", "auto_export", "custom_output", "custom_pattern", "txt"] {
+        for key in [
+            "auto_browser",
+            "restore_input",
+            "inherit",
+            "auto_export",
+            "custom_output",
+            "custom_pattern",
+            "txt",
+        ] {
             if let Some(v) = get(key) {
                 let b = v.as_bool().ok_or_else(|| invalid("設定値が不正です。"))?;
                 match key {
@@ -280,10 +332,18 @@ impl Store {
             }
         }
         let text_of = |v: &Value| v.as_str().map_or_else(|| v.to_string(), str::to_string);
-        if !matches!(get("backend").map_or(result.backend.clone(), text_of).as_str(), "cpu" | "cu128") {
+        if !matches!(
+            get("backend")
+                .map_or(result.backend.clone(), text_of)
+                .as_str(),
+            "cpu" | "cu128"
+        ) {
             return Err(invalid("CPUまたはNVIDIA GPUを選んでください。"));
         }
-        if !matches!(get("theme").map_or(result.theme.clone(), text_of).as_str(), "light" | "dark" | "system") {
+        if !matches!(
+            get("theme").map_or(result.theme.clone(), text_of).as_str(),
+            "light" | "dark" | "system"
+        ) {
             return Err(invalid("画面の配色が不正です。"));
         }
         for key in ["backend", "output_dir", "pattern", "theme"] {
@@ -303,7 +363,8 @@ impl Store {
         if result.custom_pattern && result.pattern.trim().is_empty() {
             return Err(invalid("ファイル名パターンを入力してください。"));
         }
-        let saved = serde_json::to_value(&result).map_err(|e| StoreError::Internal(e.to_string()))?;
+        let saved =
+            serde_json::to_value(&result).map_err(|e| StoreError::Internal(e.to_string()))?;
         atomic_json(&self.root.join("config/settings.json"), &saved)?;
         inner.settings = result;
         Ok(())
@@ -335,18 +396,30 @@ mod tests {
         let path = dir.path().join("config/x.json");
         atomic_json(&path, &json!({"a": 1})).unwrap();
         atomic_json(&path, &json!({"a": 2, "b": "日本語"})).unwrap();
-        let names: Vec<String> = std::fs::read_dir(dir.path().join("config")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into()).collect();
+        let names: Vec<String> = std::fs::read_dir(dir.path().join("config"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into())
+            .collect();
         assert_eq!(names, vec!["x.json".to_string()]);
         let text = std::fs::read_to_string(&path).unwrap();
-        assert_eq!(text, crate::py_json::dumps_pretty(&json!({"a": 2, "b": "日本語"})).unwrap());
+        assert_eq!(
+            text,
+            crate::py_json::dumps_pretty(&json!({"a": 2, "b": "日本語"})).unwrap()
+        );
     }
 
     #[test]
     fn read_json_accepts_a_utf8_bom_and_missing_files_are_none() {
         let dir = temp_root();
         write(&dir, "config/bom.json", b"\xef\xbb\xbf{\"k\": 1}");
-        assert_eq!(read_json(&dir.path().join("config/bom.json")).unwrap(), Some(json!({"k": 1})));
-        assert_eq!(read_json(&dir.path().join("config/none.json")).unwrap(), None);
+        assert_eq!(
+            read_json(&dir.path().join("config/bom.json")).unwrap(),
+            Some(json!({"k": 1}))
+        );
+        assert_eq!(
+            read_json(&dir.path().join("config/none.json")).unwrap(),
+            None
+        );
     }
 
     #[test]
@@ -356,37 +429,68 @@ mod tests {
         write(&dir, &format!("projects/{pid}.json"), b"{not json");
         let store = open(&dir);
         let err = store.load(Some(pid)).unwrap_err();
-        assert!(err.message().starts_with(MESSAGE_CORRUPT), "{}", err.message());
-        assert_eq!(std::fs::read(dir.path().join(format!("projects/{pid}.json"))).unwrap(), b"{not json");
+        assert!(
+            err.message().starts_with(MESSAGE_CORRUPT),
+            "{}",
+            err.message()
+        );
+        assert_eq!(
+            std::fs::read(dir.path().join(format!("projects/{pid}.json"))).unwrap(),
+            b"{not json"
+        );
     }
 
     #[test]
     fn corrupt_settings_and_voices_do_not_get_overwritten() {
         let dir = temp_root();
         write(&dir, "config/settings.json", b"garbage");
-        assert!(Store::open(dir.path()).err().unwrap().message().starts_with(MESSAGE_CORRUPT));
-        assert_eq!(std::fs::read(dir.path().join("config/settings.json")).unwrap(), b"garbage");
+        assert!(Store::open(dir.path())
+            .err()
+            .unwrap()
+            .message()
+            .starts_with(MESSAGE_CORRUPT));
+        assert_eq!(
+            std::fs::read(dir.path().join("config/settings.json")).unwrap(),
+            b"garbage"
+        );
         let dir = temp_root();
         write(&dir, "voices/index.json", b"[1, 2");
         assert!(Store::open(dir.path()).is_err());
-        assert_eq!(std::fs::read(dir.path().join("voices/index.json")).unwrap(), b"[1, 2");
+        assert_eq!(
+            std::fs::read(dir.path().join("voices/index.json")).unwrap(),
+            b"[1, 2"
+        );
         let dir = temp_root();
         write(&dir, "voices/index.json", br#"[{"no_id": true}]"#);
-        assert_eq!(Store::open(dir.path()).err().unwrap().message(), "話者一覧の形式が不正です。");
+        assert_eq!(
+            Store::open(dir.path()).err().unwrap().message(),
+            "話者一覧の形式が不正です。"
+        );
     }
 
     #[test]
     fn settings_with_another_schema_are_refused() {
         let dir = temp_root();
         write(&dir, "config/settings.json", br#"{"schema": 3}"#);
-        assert_eq!(Store::open(dir.path()).err().unwrap().message(), "設定ファイルの形式が不正です。ファイルは変更していません。");
+        assert_eq!(
+            Store::open(dir.path()).err().unwrap().message(),
+            "設定ファイルの形式が不正です。ファイルは変更していません。"
+        );
     }
 
     #[test]
     fn pid_with_traversal_or_wrong_length_is_rejected() {
         let dir = temp_root();
         let store = open(&dir);
-        for bad in ["../x", "..\\x", &"a".repeat(31), &"a".repeat(33), &"A".repeat(32), &"g".repeat(32), ""] {
+        for bad in [
+            "../x",
+            "..\\x",
+            &"a".repeat(31),
+            &"a".repeat(33),
+            &"A".repeat(32),
+            &"g".repeat(32),
+            "",
+        ] {
             let e = store.load(Some(bad));
             if bad.is_empty() {
                 continue; // 空は「未指定」扱い（last_project / 新規）
@@ -412,10 +516,18 @@ mod tests {
         let dir = temp_root();
         let store = open(&dir);
         let p = store.load(None).unwrap();
-        let updated = store.update(&p.id, 0, false, &mut |d: &mut Project| { d.name = "新しい名前".into(); Ok(()) }).unwrap();
+        let updated = store
+            .update(&p.id, 0, false, &mut |d: &mut Project| {
+                d.name = "新しい名前".into();
+                Ok(())
+            })
+            .unwrap();
         assert_eq!((updated.revision, updated.name.as_str()), (1, "新しい名前"));
         let reloaded = open(&dir).load(Some(&p.id)).unwrap();
-        assert_eq!((reloaded.revision, reloaded.name.as_str()), (1, "新しい名前"));
+        assert_eq!(
+            (reloaded.revision, reloaded.name.as_str()),
+            (1, "新しい名前")
+        );
     }
 
     #[test]
@@ -423,11 +535,30 @@ mod tests {
         let dir = temp_root();
         let store = open(&dir);
         let p = store.load(None).unwrap();
-        store.update(&p.id, 0, false, &mut |d: &mut Project| { d.name = "A".into(); Ok(()) }).unwrap();
+        store
+            .update(&p.id, 0, false, &mut |d: &mut Project| {
+                d.name = "A".into();
+                Ok(())
+            })
+            .unwrap();
         let before = std::fs::read(dir.path().join(format!("projects/{}.json", p.id))).unwrap();
-        let err = store.update(&p.id, 0, false, &mut |d: &mut Project| { d.name = "B".into(); Ok(()) }).unwrap_err();
-        assert_eq!((err.status(), err.message()), (409, "別の操作で台本が更新されています。保存済みの内容を読み直してください。"));
-        assert_eq!(std::fs::read(dir.path().join(format!("projects/{}.json", p.id))).unwrap(), before);
+        let err = store
+            .update(&p.id, 0, false, &mut |d: &mut Project| {
+                d.name = "B".into();
+                Ok(())
+            })
+            .unwrap_err();
+        assert_eq!(
+            (err.status(), err.message()),
+            (
+                409,
+                "別の操作で台本が更新されています。保存済みの内容を読み直してください。"
+            )
+        );
+        assert_eq!(
+            std::fs::read(dir.path().join(format!("projects/{}.json", p.id))).unwrap(),
+            before
+        );
     }
 
     #[test]
@@ -435,7 +566,10 @@ mod tests {
         let dir = temp_root();
         let store = open(&dir);
         let p = store.load(None).unwrap();
-        let err = store.update(&p.id, 0, false, &mut |d: &mut Project| { d.name = "half".into(); Err(crate::StoreError::Invalid("x".into())) });
+        let err = store.update(&p.id, 0, false, &mut |d: &mut Project| {
+            d.name = "half".into();
+            Err(crate::StoreError::Invalid("x".into()))
+        });
         assert!(err.is_err());
         let now = store.load(Some(&p.id)).unwrap();
         assert_eq!((now.revision, now.name.as_str()), (0, "無題の台本"));
@@ -446,7 +580,9 @@ mod tests {
         let dir = temp_root();
         let store = open(&dir);
         let p = store.load(None).unwrap();
-        let same = store.update(&p.id, 0, false, &mut |_d: &mut Project| Ok(())).unwrap();
+        let same = store
+            .update(&p.id, 0, false, &mut |_d: &mut Project| Ok(()))
+            .unwrap();
         assert_eq!(same.revision, 0);
     }
 
@@ -458,9 +594,16 @@ mod tests {
         let mut second = crate::model::new_card(None);
         second.status = "待機中".into();
         p.cards.push(second);
-        write(&dir, &format!("projects/{}.json", p.id), serde_json::to_string(&p).unwrap().as_bytes());
+        write(
+            &dir,
+            &format!("projects/{}.json", p.id),
+            serde_json::to_string(&p).unwrap().as_bytes(),
+        );
         let loaded = open(&dir).load(Some(&p.id)).unwrap();
-        assert!(loaded.cards.iter().all(|c| c.status == "中断（再生成できます）"));
+        assert!(loaded
+            .cards
+            .iter()
+            .all(|c| c.status == "中断（再生成できます）"));
     }
 
     #[test]
@@ -469,17 +612,49 @@ mod tests {
         let mut p = crate::model::new_project("x");
         let pid = p.id.clone();
         p.schema = 3;
-        write(&dir, &format!("projects/{pid}.json"), serde_json::to_string(&p).unwrap().as_bytes());
-        assert_eq!(open(&dir).load(Some(&pid)).err().unwrap().message(), "台本を読み込めません。形式または保存場所を確認してください。");
+        write(
+            &dir,
+            &format!("projects/{pid}.json"),
+            serde_json::to_string(&p).unwrap().as_bytes(),
+        );
+        assert_eq!(
+            open(&dir).load(Some(&pid)).err().unwrap().message(),
+            "台本を読み込めません。形式または保存場所を確認してください。"
+        );
         p.schema = 2;
         p.cards.push(p.cards[0].clone());
-        write(&dir, &format!("projects/{pid}.json"), serde_json::to_string(&p).unwrap().as_bytes());
-        assert_eq!(open(&dir).load(Some(&pid)).err().unwrap().message(), "台本のカード情報が不正です。");
+        write(
+            &dir,
+            &format!("projects/{pid}.json"),
+            serde_json::to_string(&p).unwrap().as_bytes(),
+        );
+        assert_eq!(
+            open(&dir).load(Some(&pid)).err().unwrap().message(),
+            "台本のカード情報が不正です。"
+        );
         p.cards.clear();
-        write(&dir, &format!("projects/{pid}.json"), serde_json::to_string(&p).unwrap().as_bytes());
-        assert_eq!(open(&dir).load(Some(&pid)).err().unwrap().message(), "台本のカード情報が不正です。");
-        write(&dir, &format!("projects/{}.json", "b".repeat(32)), serde_json::to_string(&p).unwrap().as_bytes());
-        assert_eq!(open(&dir).load(Some(&"b".repeat(32))).err().unwrap().message(), "台本を読み込めません。形式または保存場所を確認してください。");
+        write(
+            &dir,
+            &format!("projects/{pid}.json"),
+            serde_json::to_string(&p).unwrap().as_bytes(),
+        );
+        assert_eq!(
+            open(&dir).load(Some(&pid)).err().unwrap().message(),
+            "台本のカード情報が不正です。"
+        );
+        write(
+            &dir,
+            &format!("projects/{}.json", "b".repeat(32)),
+            serde_json::to_string(&p).unwrap().as_bytes(),
+        );
+        assert_eq!(
+            open(&dir)
+                .load(Some(&"b".repeat(32)))
+                .err()
+                .unwrap()
+                .message(),
+            "台本を読み込めません。形式または保存場所を確認してください。"
+        );
     }
 
     #[test]
@@ -487,9 +662,19 @@ mod tests {
         let dir = temp_root();
         let store = open(&dir);
         let p = store.load(None).unwrap();
-        let after = store.internal_update(&p.id, &mut |d: &mut Project| d.cards[0].status = "完了".into()).unwrap();
-        assert_eq!((after.revision, after.cards[0].status.as_str()), (0, "完了"));
-        assert_eq!(open(&dir).load(Some(&p.id)).unwrap().cards[0].status, "完了");
+        let after = store
+            .internal_update(&p.id, &mut |d: &mut Project| {
+                d.cards[0].status = "完了".into()
+            })
+            .unwrap();
+        assert_eq!(
+            (after.revision, after.cards[0].status.as_str()),
+            (0, "完了")
+        );
+        assert_eq!(
+            open(&dir).load(Some(&p.id)).unwrap().cards[0].status,
+            "完了"
+        );
     }
 
     #[test]
@@ -497,10 +682,17 @@ mod tests {
         let dir = temp_root();
         let store = open(&dir);
         let a = store.load(None).unwrap();
-        write(&dir, &format!("projects/{}.json", "c".repeat(32)), b"broken");
+        write(
+            &dir,
+            &format!("projects/{}.json", "c".repeat(32)),
+            b"broken",
+        );
         let list = store.list_projects();
         assert_eq!(list.len(), 1);
-        assert_eq!((list[0].id.as_str(), list[0].name.as_str()), (a.id.as_str(), "無題の台本"));
+        assert_eq!(
+            (list[0].id.as_str(), list[0].name.as_str()),
+            (a.id.as_str(), "無題の台本")
+        );
     }
 
     #[test]
@@ -518,7 +710,10 @@ mod tests {
         let dir = temp_root();
         write(&dir, "voices/index.json", br#"[{"id":"v1","revision":2,"name":"A","model":"m","audio":"voices/v1/a.wav","caption":"","future":1}]"#);
         let v: Vec<Voice> = open(&dir).voices();
-        assert_eq!((v[0].id.as_str(), v[0].extra["future"].clone()), ("v1", json!(1)));
+        assert_eq!(
+            (v[0].id.as_str(), v[0].extra["future"].clone()),
+            ("v1", json!(1))
+        );
     }
 
     #[test]
@@ -527,13 +722,34 @@ mod tests {
         let store = open(&dir);
         let err = |v: serde_json::Value| store.save_settings(&v).unwrap_err().message().to_string();
         assert_eq!(err(json!({"auto_browser": "yes"})), "設定値が不正です。");
-        assert_eq!(err(json!({"backend": "tpu"})), "CPUまたはNVIDIA GPUを選んでください。");
+        assert_eq!(
+            err(json!({"backend": "tpu"})),
+            "CPUまたはNVIDIA GPUを選んでください。"
+        );
         assert_eq!(err(json!({"theme": "neon"})), "画面の配色が不正です。");
-        assert_eq!(err(json!({"custom_output": true, "output_dir": "relative/dir"})), "保存先は絶対パスで指定してください。");
-        assert_eq!(err(json!({"custom_pattern": true, "pattern": "   "})), "ファイル名パターンを入力してください。");
-        store.save_settings(&json!({"theme": "dark", "txt": true, "pattern": "$連番$", "custom_pattern": true})).unwrap();
+        assert_eq!(
+            err(json!({"custom_output": true, "output_dir": "relative/dir"})),
+            "保存先は絶対パスで指定してください。"
+        );
+        assert_eq!(
+            err(json!({"custom_pattern": true, "pattern": "   "})),
+            "ファイル名パターンを入力してください。"
+        );
+        store
+            .save_settings(
+                &json!({"theme": "dark", "txt": true, "pattern": "$連番$", "custom_pattern": true}),
+            )
+            .unwrap();
         let s = open(&dir).settings();
-        assert_eq!((s.theme.as_str(), s.txt, s.pattern.as_str(), s.custom_pattern), ("dark", true, "$連番$", true));
+        assert_eq!(
+            (
+                s.theme.as_str(),
+                s.txt,
+                s.pattern.as_str(),
+                s.custom_pattern
+            ),
+            ("dark", true, "$連番$", true)
+        );
         // 失敗した保存は何も変えない
         assert_eq!(store.settings().theme, "dark");
     }

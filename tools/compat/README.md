@@ -8,6 +8,9 @@ cd F:\claude\upstream-irodori
 $env:UV_CACHE_DIR = "F:\claude\upstream-irodori-cache\uv"
 uv run python ..\RustEasyIrodoriTTS\tools\compat\gen_fixtures.py --out ..\RustEasyIrodoriTTS\crates\irodori-store\tests\fixtures
 ```
+`splitter_cases` は v2.0 と同じ Python 3.11（Unicode 14）で、`regex` 付きで作る: `uv run --python 3.11 --with regex python ...`。
+`unicode_tables.rs`（`isspace`/`isdigit`/カテゴリの範囲表）は `tools/compat/gen_unicode_tables.py` が同じ Python で生成する
+（Rust 側は判定を書かず表を引くので、Python の版による差が出ない）。
 `--only py_json_cases signature_cases` のように名前を絞れる。生成した JSON はコミットする（Rust のテストは Python なしで走る）。
 
 ## 内容（タスクごとに追加）

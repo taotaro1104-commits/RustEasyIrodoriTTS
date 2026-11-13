@@ -135,6 +135,60 @@ def settings_sample() -> dict:
     return dict(defaults=defaults, saved=saved)
 
 
+@fixture("splitter_cases")
+def splitter_cases() -> list[dict]:
+    """Task 6: `easy_splitter.estimate` と `split_text`（結果または ValueError の文）。"""
+    from easy_splitter import estimate, seconds, split_text
+
+    sentence = "今日はとても良い天気ですので、公園まで散歩に出かけることにしました。"
+    dicts = [
+        {},
+        {"Irodori": "いろどり", "TTS": "てぃーてぃーえす", "日本橋": "にほんばし"},
+        {"長い": "あ" * 200},
+        {"AB": "えーびー", "ABC": "えーびーしー"},
+    ]
+    texts = [
+        "", "   ", "\n\n", "こんにちは。", "こんにちは", "Hello world. This is a test!", "a b c",
+        "Irodori TTS version 2.0 は 2026年11月13日に公開されました。日本橋で会いましょう。",
+        "ABC and AB and ABCD", "😀😀😀", "👨‍👩‍👧‍👦 家族", "🇯🇵 日本", "é café", "ｱｲｳ１２３ａｂｃ", "²³①⑩⅓٣５",
+        "行1\n行2\n\n行3", "\t先頭タブ", "終わり。\n", sentence, sentence * 3, sentence * 12, "あ" * 400,
+        "アルファベットのlongwordwithoutanyspaces" + "x" * 40 + "と続く文章です。", "、" * 300, "ABC" * 100, "長い",
+        "Irodori" * 50, "あ。" * 120, "한국어 문장입니다. 안녕하세요.", "ひらがな カタカナ 漢字 Latin 123 !?",
+    ]
+    cases = []
+    for scale in (1.0, 1.5, 0.5):
+        for dictionary in dicts:
+            for text in texts:
+                case = dict(text=text, dictionary=dictionary, scale=scale)
+                try:
+                    case["estimate"] = estimate(text, dictionary, scale)
+                    case["split"] = split_text(text, dictionary, scale)
+                except ValueError as exc:
+                    case["error"] = str(exc)
+                cases.append(case)
+    chars = ["。", "！", "、", ",", " ", "漢", "5", "a", "é", "あ", "ー", "①", "²", "٣", "😀", "☃", "\n", "　", "-"]
+    return dict(cases=cases, seconds={c: seconds(c) for c in chars})
+
+
+@fixture("dictionary_cases")
+def dictionary_cases() -> list[dict]:
+    """Task 6: 読み辞書の置換（最長一致、置換後は再置換しない）。`easy_dictionary.apply` と同じ式。"""
+    import re
+
+    def apply(text, entries):
+        if not entries:
+            return text
+        pattern = "|".join(re.escape(k) for k in sorted(entries, key=len, reverse=True))
+        return re.sub(pattern, lambda m: entries[m.group()], text)
+
+    entries = {"Irodori": "いろどり", "Iro": "いろ", "TTS": "てぃーてぃーえす", "日本橋": "にほんばし", "日本": "にほん", "a.b": "えーどっとびー", "(x)": "かっこx"}
+    texts = ["Irodori TTS", "Iroha", "日本橋と日本", "a.b a-b", "(x) と x", "", "Irodori" * 3, "いろどり", "TTSTTS"]
+    cases = [dict(text=t, entries=entries, output=apply(t, entries)) for t in texts]
+    cases.append(dict(text="abc", entries={}, output="abc"))
+    cases.append(dict(text="ab ba", entries={"a": "b", "b": "a"}, output=apply("ab ba", {"a": "b", "b": "a"})))
+    return cases
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, required=True)

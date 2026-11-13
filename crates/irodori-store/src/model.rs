@@ -126,7 +126,12 @@ impl Settings {
     pub fn defaults(backend: &str) -> Settings {
         Settings {
             schema: 2,
-            backend: if matches!(backend, "cpu" | "cu128") { backend } else { "cpu" }.into(),
+            backend: if matches!(backend, "cpu" | "cu128") {
+                backend
+            } else {
+                "cpu"
+            }
+            .into(),
             theme: "light".into(),
             auto_browser: true,
             restore_input: false,
@@ -205,7 +210,10 @@ mod tests {
     fn project_round_trip_keeps_unknown_fields_and_number_types() {
         let (a, b) = roundtrip::<Project>(PROJECT);
         assert_eq!(a, b);
-        assert_eq!(b["future_project_field"]["nested"][1], serde_json::json!(2.5));
+        assert_eq!(
+            b["future_project_field"]["nested"][1],
+            serde_json::json!(2.5)
+        );
         assert_eq!(b["cards"][0]["future_card_field"], "keep me");
         assert_eq!(b["cards"][1]["missing_voice_name"], "消えた話者");
     }

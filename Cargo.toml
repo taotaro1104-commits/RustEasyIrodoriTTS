@@ -32,3 +32,4 @@ tower = { version = "0.5", features = ["util"] }
 rust-embed = "8"
 pulldown-cmark = "0.13"
 subtle = "2"
+indexmap = { version = "2", features = ["serde"] }

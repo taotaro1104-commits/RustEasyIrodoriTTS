@@ -36,7 +36,11 @@ pub fn input_state(p: &Project) -> InputState {
             v
         })
         .collect();
-    InputState { generation: p.generation.clone(), dictionary_enabled: p.dictionary_enabled, cards }
+    InputState {
+        generation: p.generation.clone(),
+        dictionary_enabled: p.dictionary_enabled,
+        cards,
+    }
 }
 
 /// カードの生成結果・状態。
@@ -70,7 +74,14 @@ impl History {
     pub fn capture(&mut self, pid: &str, doc: &Project) {
         let cache = self.outcomes.entry(pid.to_string()).or_default();
         for c in &doc.cards {
-            cache.insert(c.id.clone(), Outcome { result: c.result.clone(), status: c.status.clone(), error: c.error.clone() });
+            cache.insert(
+                c.id.clone(),
+                Outcome {
+                    result: c.result.clone(),
+                    status: c.status.clone(),
+                    error: c.error.clone(),
+                },
+            );
         }
     }
 }
@@ -88,11 +99,21 @@ impl Store {
         let mut inner = self.lock();
         let old = inner.load(Some(pid))?;
         if old.revision != revision {
-            return Err(StoreError::Conflict("入力内容が更新されています。画面を読み直してください。".into()));
+            return Err(StoreError::Conflict(
+                "入力内容が更新されています。画面を読み直してください。".into(),
+            ));
         }
-        let stack = if redo { &inner.history.redo } else { &inner.history.undo };
+        let stack = if redo {
+            &inner.history.redo
+        } else {
+            &inner.history.undo
+        };
         let Some(target) = stack.get(pid).and_then(|v| v.last()).cloned() else {
-            let msg = if redo { "やり直せる操作がありません。" } else { "元に戻せる操作がありません。" };
+            let msg = if redo {
+                "やり直せる操作がありません。"
+            } else {
+                "元に戻せる操作がありません。"
+            };
             return Err(StoreError::Invalid(msg.into()));
         };
         inner.history.capture(pid, &old);
@@ -103,7 +124,10 @@ impl Store {
         doc.cards = target
             .cards
             .iter()
-            .map(|v| serde_json::from_value::<Card>(v.clone()).map_err(|e| StoreError::Internal(e.to_string())))
+            .map(|v| {
+                serde_json::from_value::<Card>(v.clone())
+                    .map_err(|e| StoreError::Internal(e.to_string()))
+            })
             .collect::<Result<Vec<_>>>()?;
         let outcomes = inner.history.outcomes.get(pid);
         for c in &mut doc.cards {
@@ -128,7 +152,11 @@ impl Store {
         inner.projects.insert(pid.to_string(), doc.clone());
 
         let h = &mut inner.history;
-        let (source, destination) = if redo { (&mut h.redo, &mut h.undo) } else { (&mut h.undo, &mut h.redo) };
+        let (source, destination) = if redo {
+            (&mut h.redo, &mut h.undo)
+        } else {
+            (&mut h.undo, &mut h.redo)
+        };
         if let Some(v) = source.get_mut(pid) {
             v.pop();
         }
@@ -158,7 +186,12 @@ mod tests {
 
     fn set_text(store: &Store, pid: &str, text: &str) -> Project {
         let rev = store.load(Some(pid)).unwrap().revision;
-        store.update(pid, rev, true, &mut |d: &mut Project| { d.cards[0].text = text.into(); Ok(()) }).unwrap()
+        store
+            .update(pid, rev, true, &mut |d: &mut Project| {
+                d.cards[0].text = text.into();
+                Ok(())
+            })
+            .unwrap()
     }
 
     #[test]
@@ -167,7 +200,10 @@ mod tests {
         set_text(&store, &pid, "A");
         let b = set_text(&store, &pid, "B");
         let undone = store.travel(&pid, b.revision, false).unwrap();
-        assert_eq!((undone.cards[0].text.as_str(), undone.revision), ("A", b.revision + 1));
+        assert_eq!(
+            (undone.cards[0].text.as_str(), undone.revision),
+            ("A", b.revision + 1)
+        );
         let redone = store.travel(&pid, undone.revision, true).unwrap();
         assert_eq!(redone.cards[0].text, "B");
         assert_eq!(store.history(&pid), (true, false));
@@ -207,24 +243,49 @@ mod tests {
     #[test]
     fn selection_and_results_are_not_edit_operations() {
         let (_d, store, pid) = setup();
-        let rev = store.update(&pid, 0, true, &mut |d: &mut Project| { d.cards.push(new_card(None)); Ok(()) }).unwrap().revision;
+        let rev = store
+            .update(&pid, 0, true, &mut |d: &mut Project| {
+                d.cards.push(new_card(None));
+                Ok(())
+            })
+            .unwrap()
+            .revision;
         assert_eq!(store.history(&pid), (true, false));
         let _ = store.travel(&pid, rev, false).unwrap(); // 履歴を空にする
         let p = store.load(Some(&pid)).unwrap();
         let other = new_card(None);
         let other_id = other.id.clone();
-        let p = store.update(&pid, p.revision, false, &mut |d: &mut Project| { d.cards.push(other.clone()); Ok(()) }).unwrap();
+        let p = store
+            .update(&pid, p.revision, false, &mut |d: &mut Project| {
+                d.cards.push(other.clone());
+                Ok(())
+            })
+            .unwrap();
         // 選択の変更は履歴に積まない
-        store.update(&pid, p.revision, true, &mut |d: &mut Project| { d.selected = other_id.clone(); Ok(()) }).unwrap();
+        store
+            .update(&pid, p.revision, true, &mut |d: &mut Project| {
+                d.selected = other_id.clone();
+                Ok(())
+            })
+            .unwrap();
         // 生成結果の更新も積まない
-        store.internal_update(&pid, &mut |d: &mut Project| d.cards[0].status = "完了".into()).unwrap();
+        store
+            .internal_update(&pid, &mut |d: &mut Project| {
+                d.cards[0].status = "完了".into()
+            })
+            .unwrap();
         assert_eq!(store.history(&pid).0, false);
     }
 
     #[test]
     fn undo_restores_cached_results_for_cards() {
         let (_d, store, pid) = setup();
-        store.internal_update(&pid, &mut |d: &mut Project| { d.cards[0].status = "完了".into(); d.cards[0].result = Some(json!({"path": "x.wav"})); }).unwrap();
+        store
+            .internal_update(&pid, &mut |d: &mut Project| {
+                d.cards[0].status = "完了".into();
+                d.cards[0].result = Some(json!({"path": "x.wav"}));
+            })
+            .unwrap();
         let edited = set_text(&store, &pid, "変更");
         let undone = store.travel(&pid, edited.revision, false).unwrap();
         assert_eq!(undone.cards[0].status, "完了");
@@ -236,7 +297,13 @@ mod tests {
         let (_d, store, pid) = setup();
         let added = new_card(None);
         let added_id = added.id.clone();
-        let p = store.update(&pid, 0, true, &mut |d: &mut Project| { d.cards.push(added.clone()); d.selected = added.id.clone(); Ok(()) }).unwrap();
+        let p = store
+            .update(&pid, 0, true, &mut |d: &mut Project| {
+                d.cards.push(added.clone());
+                d.selected = added.id.clone();
+                Ok(())
+            })
+            .unwrap();
         assert_eq!(p.cards.len(), 2);
         let undone = store.travel(&pid, p.revision, false).unwrap();
         assert_eq!(undone.cards.len(), 1);
@@ -247,8 +314,14 @@ mod tests {
     #[test]
     fn empty_history_errors_have_python_messages() {
         let (_d, store, pid) = setup();
-        assert_eq!(store.travel(&pid, 0, false).err().unwrap().message(), "元に戻せる操作がありません。");
-        assert_eq!(store.travel(&pid, 0, true).err().unwrap().message(), "やり直せる操作がありません。");
+        assert_eq!(
+            store.travel(&pid, 0, false).err().unwrap().message(),
+            "元に戻せる操作がありません。"
+        );
+        assert_eq!(
+            store.travel(&pid, 0, true).err().unwrap().message(),
+            "やり直せる操作がありません。"
+        );
     }
 
     #[test]
@@ -256,7 +329,13 @@ mod tests {
         let (_d, store, pid) = setup();
         set_text(&store, &pid, "A");
         let err = store.travel(&pid, 0, false).unwrap_err();
-        assert_eq!((err.status(), err.message()), (409, "入力内容が更新されています。画面を読み直してください。"));
+        assert_eq!(
+            (err.status(), err.message()),
+            (
+                409,
+                "入力内容が更新されています。画面を読み直してください。"
+            )
+        );
     }
 
     #[test]
@@ -264,7 +343,11 @@ mod tests {
         let (dir, store, pid) = setup();
         set_text(&store, &pid, "A");
         let reopened = Store::open(dir.path()).unwrap();
-        assert_eq!(reopened.history(&pid), (false, false), "履歴はメモリ上のみ（v2.0 と同じ）");
+        assert_eq!(
+            reopened.history(&pid),
+            (false, false),
+            "履歴はメモリ上のみ（v2.0 と同じ）"
+        );
         assert_eq!(reopened.load(Some(&pid)).unwrap().cards[0].text, "A");
     }
 }

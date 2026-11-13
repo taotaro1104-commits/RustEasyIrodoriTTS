@@ -39,7 +39,9 @@ fn number(v: &Value, min: f64, max: f64, label: &str, min_s: &str, max_s: &str) 
     };
     match x {
         Some(x) if x.is_finite() && min <= x && x <= max => Ok(x),
-        _ => Err(invalid(format!("{label}は{min_s}～{max_s}で指定してください。"))),
+        _ => Err(invalid(format!(
+            "{label}は{min_s}～{max_s}で指定してください。"
+        ))),
     }
 }
 
@@ -77,7 +79,9 @@ const OPTIONAL_RANGES: [Range; 8] = [
 
 /// 利用者の入力から正規化した生成設定を作る。検証順は Python と同じ（先に当たったエラーが返る）。
 pub fn validate_generation(values: &Value) -> Result<Generation> {
-    let obj = values.as_object().ok_or_else(|| invalid("生成設定が不正です。"))?;
+    let obj = values
+        .as_object()
+        .ok_or_else(|| invalid("生成設定が不正です。"))?;
     let mut r = default_generation();
     for (k, v) in obj {
         if r.contains_key(k) {
@@ -104,12 +108,19 @@ pub fn validate_generation(values: &Value) -> Result<Generation> {
     };
     r.insert("seed".into(), seed);
     let mode_ok = matches!(r["t_schedule_mode"].as_str(), Some("linear" | "sway"))
-        && matches!(r["cfg_guidance_mode"].as_str(), Some("independent" | "joint" | "alternating"));
+        && matches!(
+            r["cfg_guidance_mode"].as_str(),
+            Some("independent" | "joint" | "alternating")
+        );
     if !mode_ok {
         return Err(invalid("生成設定が不正です。"));
     }
     for (key, min, max, min_s, max_s) in OPTIONAL_RANGES {
-        let v = if is_blank(&r[key]) { Value::Null } else { float(number(&r[key], min, max, key, min_s, max_s)?) };
+        let v = if is_blank(&r[key]) {
+            Value::Null
+        } else {
+            float(number(&r[key], min, max, key, min_s, max_s)?)
+        };
         r.insert(key.into(), v);
     }
     for key in ["max_text_len", "max_caption_len"] {
@@ -151,8 +162,16 @@ mod tests {
             let input = &case["input"];
             let got = validate_generation(input);
             match case.get("error") {
-                Some(e) => assert_eq!(got.err().map(|x| x.message().to_string()).as_deref(), e.as_str(), "input {input}"),
-                None => assert_eq!(Value::Object(got.unwrap_or_else(|e| panic!("input {input}: {}", e.message()))), case["output"], "input {input}"),
+                Some(e) => assert_eq!(
+                    got.err().map(|x| x.message().to_string()).as_deref(),
+                    e.as_str(),
+                    "input {input}"
+                ),
+                None => assert_eq!(
+                    Value::Object(got.unwrap_or_else(|e| panic!("input {input}: {}", e.message()))),
+                    case["output"],
+                    "input {input}"
+                ),
             }
         }
     }
@@ -160,20 +179,28 @@ mod tests {
     #[test]
     fn defaults_have_python_key_order() {
         let keys: Vec<String> = default_generation().keys().cloned().collect();
-        assert_eq!(&keys[..4], ["steps", "duration_scale", "seed", "cfg_scale_text"]);
+        assert_eq!(
+            &keys[..4],
+            ["steps", "duration_scale", "seed", "cfg_scale_text"]
+        );
         assert_eq!(keys.last().unwrap(), "codec_precision");
         assert_eq!(keys.len(), 23);
     }
 
     #[test]
     fn non_object_input_is_rejected() {
-        assert_eq!(validate_generation(&Value::Null).err().unwrap().message(), "生成設定が不正です。");
+        assert_eq!(
+            validate_generation(&Value::Null).err().unwrap().message(),
+            "生成設定が不正です。"
+        );
         assert!(validate_generation(&serde_json::json!([1])).is_err());
     }
 
     #[test]
     fn non_numeric_strings_are_rejected_with_the_range_message() {
-        let e = validate_generation(&serde_json::json!({"duration_scale": "abc"})).err().unwrap();
+        let e = validate_generation(&serde_json::json!({"duration_scale": "abc"}))
+            .err()
+            .unwrap();
         assert_eq!(e.message(), "duration_scaleは0.5～1.5で指定してください。");
     }
 }
