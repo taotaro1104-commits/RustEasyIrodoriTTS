@@ -51,7 +51,8 @@ pub fn map_error(error: IrodoriError, has_reference: bool) -> SynthError {
         IrodoriError::SilentReference | IrodoriError::ReferenceTooShort { .. } => {
             invalid("参照音声を確認してください。")
         }
-        IrodoriError::Audio(_) | IrodoriError::Io(_) if has_reference => {
+        // 入出力の失敗（モデルファイルの欠損・破損など）は参照音声のせいにしない。参照の有無は事前に確かめてある。
+        IrodoriError::Audio(_) if has_reference => {
             invalid("参照音声を読み込めません。形式を確認してください。")
         }
         IrodoriError::InvalidInput(detail) => {
@@ -107,6 +108,14 @@ impl Synthesizer for RealSynth {
         let options = options_from(&job.generation)?;
         let files = models::locate(&self.hub, &job.model)
             .ok_or_else(|| invalid("モデルがまだ取得されていません。"))?;
+        // 参照音声のファイルが無い・開けないことは、モデルを読み込む前に分かる。
+        if let Some(reference) = job.references.first() {
+            if std::fs::File::open(reference).is_err() {
+                return Err(invalid(
+                    "参照音声を読み込めません。話者を登録し直してください。",
+                ));
+            }
+        }
         let runtime = self.runtime_for(
             (job.model.clone(), options.model_bf16, options.codec_bf16),
             files,
@@ -314,6 +323,58 @@ mod tests {
         assert_eq!(
             synth.synthesize(&job).err().unwrap(),
             SynthError::Invalid("お手本の音声は1つだけ使えます。".into())
+        );
+    }
+
+    #[test]
+    fn model_file_io_errors_are_not_blamed_on_the_reference_voice() {
+        let io = || IrodoriError::Io(std::io::Error::other("truncated model.safetensors"));
+        assert!(
+            matches!(map_error(io(), true), SynthError::Failed(d) if d.contains("truncated")),
+            "an IO error with a reference is still ours"
+        );
+        assert!(matches!(map_error(io(), false), SynthError::Failed(_)));
+    }
+
+    /// 偽のモデル置き場（ファイルは空でよい。読み込みまで進まないテスト用）。
+    fn fake_hub(dir: &std::path::Path) -> std::path::PathBuf {
+        let hub = dir.join("hub");
+        for (id, sha, files) in [
+            (
+                MF,
+                "aaaa1111",
+                vec!["model.safetensors", "tokenizer/tokenizer.json"],
+            ),
+            (crate::models::CODEC_ID, "cccc3333", vec!["weights.pth"]),
+        ] {
+            for f in files {
+                let path = hub
+                    .join(format!("models--{}", id.replace('/', "--")))
+                    .join("snapshots")
+                    .join(sha)
+                    .join(f);
+                std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                std::fs::write(path, b"x").unwrap();
+            }
+        }
+        hub
+    }
+
+    #[test]
+    fn a_missing_reference_file_is_reported_before_the_model_is_loaded() {
+        let dir = tempfile::tempdir().unwrap();
+        let synth = RealSynth::new(dir.path().to_path_buf(), fake_hub(dir.path()));
+        assert!(synth.model_available(MF));
+        let mut job = SynthJob::new("こんにちは", MF, default_generation());
+        job.references = vec![dir.path().join("voices/none/ref.wav")];
+        let err = synth.synthesize(&job).err().unwrap();
+        assert_eq!(
+            err,
+            SynthError::Invalid("参照音声を読み込めません。話者を登録し直してください。".into())
+        );
+        assert!(
+            !synth.is_loaded(),
+            "nothing was loaded for a request that cannot run"
         );
     }
 

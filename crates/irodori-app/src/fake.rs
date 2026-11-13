@@ -26,6 +26,7 @@ pub struct FakeSynth {
     missing: HashSet<String>,
     calls: Mutex<Vec<String>>,
     loaded: AtomicBool,
+    on_success: Option<Box<dyn Fn(&Path) + Send + Sync>>,
 }
 
 impl FakeSynth {
@@ -39,6 +40,7 @@ impl FakeSynth {
             missing: HashSet::new(),
             calls: Mutex::new(Vec::new()),
             loaded: AtomicBool::new(false),
+            on_success: None,
         }
     }
 
@@ -64,6 +66,12 @@ impl FakeSynth {
 
     pub fn missing_models(mut self, models: &[&str]) -> FakeSynth {
         self.missing.extend(models.iter().map(|m| m.to_string()));
+        self
+    }
+
+    /// 合成に成功して結果を返す直前に、データのルートを渡して呼ぶ（保存先を壊すなど、失敗の再現に使う）。
+    pub fn on_success(mut self, hook: impl Fn(&Path) + Send + Sync + 'static) -> FakeSynth {
+        self.on_success = Some(Box::new(hook));
         self
     }
 
@@ -121,6 +129,9 @@ impl Synthesizer for FakeSynth {
             irodori_core::audio::write_wav(&path, &sine_clip(), SAMPLE_RATE)
                 .map_err(|e| SynthError::Failed(e.to_string()))?;
             paths.push(path);
+        }
+        if let Some(hook) = &self.on_success {
+            hook(&self.root);
         }
         Ok(SynthRecord {
             id,

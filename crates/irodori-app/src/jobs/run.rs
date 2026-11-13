@@ -50,6 +50,19 @@ fn run_work(inner: &Arc<Inner>, work: Work) {
         });
     if let Err(e) = reset {
         tracing::error!("could not reset card statuses: {}", e.message());
+        inner.note_save_error(
+            "結果を保存できませんでした。保存先の空き容量とアクセス権を確認してください。"
+                .to_string(),
+        );
+    }
+    // 最後の保存の失敗も、ジョブの結果に反映する（「完了」のままにしない）。
+    if let Some(message) = inner.take_save_error() {
+        inner.update_job(&job_id, |j| {
+            j.error = message;
+            if j.status == "完了" {
+                j.status = "完了（一部失敗）".into();
+            }
+        });
     }
 }
 
@@ -75,6 +88,9 @@ fn mark(
         });
     if let Err(e) = outcome {
         tracing::error!("could not save the card status: {}", e.message());
+        inner.note_save_error(format!(
+            "結果を保存できませんでした。保存先の空き容量とアクセス権を確認してください。"
+        ));
     }
 }
 
@@ -145,6 +161,9 @@ fn run_requests(inner: &Arc<Inner>, job_id: &str, project: &str, requests: &[Req
                     None,
                 );
             }
+        }
+        if let Some(message) = inner.take_save_error() {
+            last_error = message;
         }
         inner.update_job(job_id, |j| {
             j.done += 1;

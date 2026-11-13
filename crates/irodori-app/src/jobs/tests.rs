@@ -604,3 +604,35 @@ fn old_finished_jobs_are_not_kept_forever() {
         e.jobs.jobs_json().len()
     );
 }
+
+/// プロジェクトのファイルを読み取り専用にして、保存を失敗させる（テストの後始末で戻す）。
+fn set_projects_readonly(root: &Path, readonly: bool) {
+    for entry in std::fs::read_dir(root.join("projects")).unwrap().flatten() {
+        let mut perms = entry.metadata().unwrap().permissions();
+        perms.set_readonly(readonly);
+        std::fs::set_permissions(entry.path(), perms).unwrap();
+    }
+}
+
+#[test]
+fn a_failed_result_save_is_reported_as_a_job_error_not_as_success() {
+    let e = env(&["一つ目です。"], |s| {
+        s.on_success(|root| set_projects_readonly(root, true))
+    });
+    assert_eq!(
+        e.submit(None, false, false).unwrap(),
+        SubmitOutcome::Started
+    );
+    e.wait_idle();
+    set_projects_readonly(e.dir.path(), false);
+    let job = e.jobs.jobs_json().pop().unwrap();
+    assert_eq!(
+        job["status"], "完了（一部失敗）",
+        "the job must not claim full success: {job}"
+    );
+    assert_eq!(
+        job["error"],
+        "結果を保存できませんでした。保存先の空き容量とアクセス権を確認してください。"
+    );
+    assert_eq!(e.jobs.jobs_json().len(), 1);
+}

@@ -75,11 +75,24 @@ pub(crate) struct Inner {
     pub store: Arc<Store>,
     pub synth: Arc<dyn Synthesizer>,
     jobs: Mutex<Vec<Job>>,
+    /// カードの状態・結果を保存できなかったときの理由（ジョブが「完了」と報告しないために、ワーカーが拾う）。
+    save_error: Mutex<Option<String>>,
 }
 
 impl Inner {
     pub fn jobs(&self) -> MutexGuard<'_, Vec<Job>> {
         self.jobs.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn note_save_error(&self, message: String) {
+        *self.save_error.lock().unwrap_or_else(|e| e.into_inner()) = Some(message);
+    }
+
+    pub fn take_save_error(&self) -> Option<String> {
+        self.save_error
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
     }
 
     /// 該当のジョブがあれば `f` を適用する。
@@ -103,6 +116,7 @@ impl JobManager {
             store,
             synth,
             jobs: Mutex::new(Vec::new()),
+            save_error: Mutex::new(None),
         });
         let (tx, rx) = mpsc::channel();
         let worker = Arc::clone(&inner);
