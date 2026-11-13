@@ -2,11 +2,13 @@
 
 pub mod assets_embed;
 pub mod errors;
+pub mod fake;
 pub mod launch;
 pub mod logging;
 pub mod meta;
 pub mod routes;
 pub mod security;
+pub mod synth;
 
 use std::path::PathBuf;
 use std::sync::Arc;
