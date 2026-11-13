@@ -1,0 +1,6 @@
+target/
+golden/
+models/
+.superpowers/
+EasyIrodoriTTS_v2.0/
+EasyIrodoriTTS_v2.0.zip
