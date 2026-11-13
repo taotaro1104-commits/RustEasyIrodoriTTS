@@ -177,6 +177,9 @@ mod tests {
     use serde_json::json;
     use std::net::TcpListener;
 
+    /// ポートを探すテストは、互いの確保・解放に当たらないよう 1 つずつ動かす。
+    static PORTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     fn data_dir() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         prepare_dirs(dir.path()).unwrap();
@@ -221,6 +224,7 @@ mod tests {
 
     #[test]
     fn pick_port_returns_the_preferred_port_when_it_is_free() {
+        let _serial = PORTS.lock().unwrap_or_else(|e| e.into_inner());
         let free = TcpListener::bind("127.0.0.1:0")
             .unwrap()
             .local_addr()
@@ -231,6 +235,7 @@ mod tests {
 
     #[test]
     fn pick_port_skips_a_busy_port() {
+        let _serial = PORTS.lock().unwrap_or_else(|e| e.into_inner());
         let busy = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = busy.local_addr().unwrap().port();
         let picked = pick_port(port).unwrap();
