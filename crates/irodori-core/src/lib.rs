@@ -1,6 +1,7 @@
 //! Irodori-TTS の Candle 実装（CPU）。
 pub mod error;
 pub mod attention;
+pub mod audio;
 pub mod codec;
 pub mod conditioner;
 pub mod config;

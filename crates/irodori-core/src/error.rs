@@ -11,6 +11,12 @@ pub enum IrodoriError {
     Json(#[from] serde_json::Error),
     #[error("missing safetensors metadata entry: {0}")]
     MissingMetadata(String),
+    #[error("audio error: {0}")]
+    Audio(String),
+    #[error("reference audio is silent")]
+    SilentReference,
+    #[error("reference audio is too short: {seconds:.2}s")]
+    ReferenceTooShort { seconds: f32 },
     #[error("missing tensor in checkpoint: {0}")]
     MissingKey(String),
     #[error("invalid safetensors file: {0}")]
