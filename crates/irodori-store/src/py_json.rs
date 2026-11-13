@@ -225,4 +225,25 @@ mod tests {
         let v: Value = serde_json::from_str(r#"{"b":1,"B":2,"あ":3,"a":4}"#).unwrap();
         assert_eq!(dumps_sorted(&v), r#"{"B": 2, "a": 4, "b": 1, "あ": 3}"#);
     }
+
+    #[test]
+    fn seventeen_digit_floats_survive_parse_and_dump_exactly() {
+        // serde_json の既定の浮動小数パーサは 1 ULP ずれることがある（`float_roundtrip` が要る）。
+        // ずれると署名が変わり、v2.0 の結果が「再生成が必要」になる。
+        for text in [
+            "1.1500000000000001",
+            "0.30000000000000004",
+            "2.2250738585072014e-308",
+            "1.7976931348623157e+308",
+            "0.1",
+            "123456789.12345679",
+        ] {
+            let expected: f64 = text.parse().unwrap();
+            let parsed: Value = serde_json::from_str(text).unwrap();
+            assert_eq!(parsed.as_f64(), Some(expected), "parse {text}");
+            assert_eq!(dumps_sorted(&parsed), float_repr(expected), "dump {text}");
+        }
+        let v: Value = serde_json::from_str("[1.1500000000000001]").unwrap();
+        assert_eq!(dumps_sorted(&v), "[1.1500000000000001]");
+    }
 }

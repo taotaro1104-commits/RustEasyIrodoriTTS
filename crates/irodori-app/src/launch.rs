@@ -73,28 +73,36 @@ pub fn pick_port(preferred: u16) -> Result<u16> {
 /// 二重起動を防ぐロック。放す（Drop）か、プロセスが終わると解除される。
 #[derive(Debug)]
 pub struct LockGuard {
-    _file: File,
+    _files: Vec<File>,
 }
 
+/// 同じデータフォルダを同時に使わないための印。
+/// `app.lock` はこのアプリ同士、`environment.lock` は v2.0（Python 版）との排他に使う（v2.0 が同じファイルをロックする）。
+const LOCK_FILES: [&str; 2] = ["temp/app.lock", "temp/environment.lock"];
+
 pub fn acquire_lock(root: &Path) -> Result<LockGuard> {
-    let path = root.join("temp/app.lock");
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&path)
-        .context("起動の印（temp/app.lock）を作れません。")?;
-    match file.try_lock() {
-        Ok(()) => Ok(LockGuard { _file: file }),
-        Err(TryLockError::WouldBlock) => bail!("アプリはすでに起動しています。"),
-        Err(TryLockError::Error(e)) => {
-            Err(e).context("起動の印（temp/app.lock）を確認できません。")
+    let mut files = Vec::with_capacity(LOCK_FILES.len());
+    for name in LOCK_FILES {
+        let path = root.join(name);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)
+            .with_context(|| format!("起動の印（{name}）を作れません。"))?;
+        match file.try_lock() {
+            Ok(()) => files.push(file),
+            Err(TryLockError::WouldBlock) => bail!("アプリはすでに起動しています。"),
+            Err(TryLockError::Error(e)) => {
+                return Err(e).with_context(|| format!("起動の印（{name}）を確認できません。"))
+            }
         }
     }
+    Ok(LockGuard { _files: files })
 }
 
 /// v2.0 の起動時の動き。`restore_input` が偽なら、毎回新しい台本を開く。
@@ -308,5 +316,41 @@ mod tests {
         let store = Store::open(dir.path()).unwrap();
         fresh_start(&store).unwrap();
         assert_ne!(store.settings().last_project, old);
+    }
+
+    #[test]
+    fn lock_is_refused_while_v2_holds_the_environment_lock() {
+        // v2.0（Python）は同じ `temp/environment.lock` を取る。同じデータフォルダを同時に書くと、後から書いた側が勝って編集が消える。
+        let dir = data_dir();
+        let path = dir.path().join("temp/environment.lock");
+        let v2 = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)
+            .unwrap();
+        v2.try_lock().unwrap();
+        let err = acquire_lock(dir.path()).expect_err("v2.0 is running");
+        assert_eq!(err.to_string(), "アプリはすでに起動しています。");
+        drop(v2);
+        assert!(acquire_lock(dir.path()).is_ok(), "released once v2.0 stops");
+    }
+
+    #[test]
+    fn running_app_blocks_v2_from_starting_on_the_same_folder() {
+        let dir = data_dir();
+        let _guard = acquire_lock(dir.path()).unwrap();
+        let v2 = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(dir.path().join("temp/environment.lock"))
+            .unwrap();
+        assert!(
+            v2.try_lock().is_err(),
+            "v2.0 must see the environment lock as taken"
+        );
     }
 }
