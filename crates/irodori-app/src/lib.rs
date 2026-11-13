@@ -14,6 +14,7 @@ pub mod security;
 pub mod settings_map;
 pub mod synth;
 pub mod upload;
+pub mod voices;
 
 use std::path::PathBuf;
 use std::sync::Arc;

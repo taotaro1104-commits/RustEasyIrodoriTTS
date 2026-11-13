@@ -185,3 +185,15 @@ pub async fn post_file(
     }
     run(app, req.body(Body::from(body)).unwrap()).await
 }
+
+/// トークンを付けない POST（403 になるはず）。
+pub async fn post_raw_no_token(app: &Router, uri: &str) -> Reply {
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri(uri)
+        .header(header::HOST, "127.0.0.1:7860")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from("{}"))
+        .unwrap();
+    run(app, req).await
+}

@@ -21,20 +21,17 @@ use tower_http::services::ServeFile;
 use crate::errors::ApiError;
 use crate::AppState;
 
-type ApiResult<T> = Result<T, ApiError>;
+pub(crate) type ApiResult<T> = Result<T, ApiError>;
 
 const NOT_YET: &str = "未対応です（この版ではまだ使えません）。";
 
 /// M2b/M2c で実装するルート（POST）。
-const UNIMPLEMENTED_POST: [&str; 15] = [
+const UNIMPLEMENTED_POST: [&str; 12] = [
     "/api/choose-folder",
     "/api/cleanup-preview",
     "/api/cleanup",
     "/api/input-data/save",
     "/api/input-data/load",
-    "/api/voice",
-    "/api/voice/delete",
-    "/api/voice/rename",
     "/api/design-registration",
     "/api/design",
     "/api/audio-list",
@@ -49,7 +46,7 @@ fn bad(message: &str) -> ApiError {
 }
 
 /// 本文を JSON のオブジェクトとして読む（Content-Type は問わない）。
-fn parse(body: &Bytes) -> ApiResult<Map<String, Value>> {
+pub(crate) fn parse(body: &Bytes) -> ApiResult<Map<String, Value>> {
     match serde_json::from_slice::<Value>(body) {
         Ok(Value::Object(m)) => Ok(m),
         _ => Err(bad(
@@ -58,7 +55,7 @@ fn parse(body: &Bytes) -> ApiResult<Map<String, Value>> {
     }
 }
 
-fn text<'a>(data: &'a Map<String, Value>, key: &str) -> ApiResult<&'a str> {
+pub(crate) fn text<'a>(data: &'a Map<String, Value>, key: &str) -> ApiResult<&'a str> {
     data.get(key)
         .and_then(Value::as_str)
         .ok_or_else(|| bad("リクエストの内容が不足しています。画面を再読み込みしてください。"))
@@ -317,6 +314,9 @@ pub fn routes() -> Router<AppState> {
         .route("/api/generate", post(generate))
         .route("/api/stop", post(stop))
         .route("/api/unload", post(unload))
+        .route("/api/voice", post(crate::voices::voice))
+        .route("/api/voice/rename", post(crate::voices::rename))
+        .route("/api/voice/delete", post(crate::voices::delete))
         .route(
             "/api/upload",
             post(crate::upload::upload).layer(DefaultBodyLimit::max(
