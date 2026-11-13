@@ -3,6 +3,7 @@
 pub mod assets_embed;
 pub mod errors;
 pub mod fake;
+pub mod jobs;
 pub mod launch;
 pub mod logging;
 pub mod meta;
