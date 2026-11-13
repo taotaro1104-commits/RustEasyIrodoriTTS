@@ -13,6 +13,7 @@ pub mod routes;
 pub mod security;
 pub mod settings_map;
 pub mod synth;
+pub mod upload;
 
 use std::path::PathBuf;
 use std::sync::Arc;

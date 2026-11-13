@@ -491,7 +491,6 @@ async fn unimplemented_routes_return_501_json() {
         "/api/voice",
         "/api/voice/delete",
         "/api/voice/rename",
-        "/api/upload",
         "/api/export",
         "/api/bundle",
         "/api/save-audio",

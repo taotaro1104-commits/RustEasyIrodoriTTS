@@ -133,3 +133,55 @@ pub async fn post_raw(app: &Router, uri: &str, body: &str) -> Reply {
         .unwrap();
     run(app, req).await
 }
+
+/// 16bit の WAV（正弦波）をメモリ上に作る。
+pub fn wav_bytes(rate: u32, channels: u16, seconds: f64) -> Vec<u8> {
+    let spec = hound::WavSpec {
+        channels,
+        sample_rate: rate,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut cursor = std::io::Cursor::new(Vec::new());
+    {
+        let mut w = hound::WavWriter::new(&mut cursor, spec).unwrap();
+        for i in 0..(f64::from(rate) * seconds) as usize {
+            let v = (2.0 * std::f64::consts::PI * 440.0 * i as f64 / f64::from(rate)).sin() * 0.3;
+            for _ in 0..channels {
+                w.write_sample((v * 32767.0) as i16).unwrap();
+            }
+        }
+        w.finalize().unwrap();
+    }
+    cursor.into_inner()
+}
+
+/// `multipart/form-data` で 1 ファイルを送る。`field` は項目名、`token` が偽ならトークンを付けない。
+pub async fn post_file(
+    app: &Router,
+    uri: &str,
+    field: &str,
+    filename: &str,
+    bytes: &[u8],
+    token: bool,
+) -> Reply {
+    let boundary = "----easy-test-boundary";
+    let head = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"{filename}\"\r\nContent-Type: application/octet-stream\r\n\r\n"
+    );
+    let mut body = head.into_bytes();
+    body.extend_from_slice(bytes);
+    body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+    let mut req = Request::builder()
+        .method(Method::POST)
+        .uri(uri)
+        .header(header::HOST, "127.0.0.1:7860")
+        .header(
+            header::CONTENT_TYPE,
+            format!("multipart/form-data; boundary={boundary}"),
+        );
+    if token {
+        req = req.header("x-easy-token", TOKEN);
+    }
+    run(app, req.body(Body::from(body)).unwrap()).await
+}

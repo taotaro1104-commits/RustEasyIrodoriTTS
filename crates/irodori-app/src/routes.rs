@@ -3,7 +3,7 @@
 
 use crate::jobs::SubmitOutcome;
 use axum::body::{Body, Bytes};
-use axum::extract::{Path, Query, Request, State};
+use axum::extract::{DefaultBodyLimit, Path, Query, Request, State};
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -26,8 +26,7 @@ type ApiResult<T> = Result<T, ApiError>;
 const NOT_YET: &str = "未対応です（この版ではまだ使えません）。";
 
 /// M2b/M2c で実装するルート（POST）。
-const UNIMPLEMENTED_POST: [&str; 16] = [
-    "/api/upload",
+const UNIMPLEMENTED_POST: [&str; 15] = [
     "/api/choose-folder",
     "/api/cleanup-preview",
     "/api/cleanup",
@@ -318,6 +317,12 @@ pub fn routes() -> Router<AppState> {
         .route("/api/generate", post(generate))
         .route("/api/stop", post(stop))
         .route("/api/unload", post(unload))
+        .route(
+            "/api/upload",
+            post(crate::upload::upload).layer(DefaultBodyLimit::max(
+                crate::upload::MAX_UPLOAD_BYTES as usize + 1024 * 1024,
+            )),
+        )
         .route("/audio/{key}", get(audio))
         .route("/bundle/{key}", get(not_yet));
     for path in UNIMPLEMENTED_POST {
