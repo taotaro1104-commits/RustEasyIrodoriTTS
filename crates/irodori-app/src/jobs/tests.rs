@@ -612,9 +612,11 @@ fn old_finished_jobs_are_not_kept_forever() {
 /// プロジェクトのファイルを読み取り専用にして、保存を失敗させる（テストの後始末で戻す）。
 fn set_projects_readonly(root: &Path, readonly: bool) {
     for entry in std::fs::read_dir(root.join("projects")).unwrap().flatten() {
-        let mut perms = entry.metadata().unwrap().permissions();
+        // 保存の途中の一時ファイルは、列挙のあとで rename されて消えることがある（その場合は読み飛ばす）。
+        let Ok(meta) = entry.metadata() else { continue };
+        let mut perms = meta.permissions();
         perms.set_readonly(readonly);
-        std::fs::set_permissions(entry.path(), perms).unwrap();
+        let _ = std::fs::set_permissions(entry.path(), perms);
     }
 }
 
