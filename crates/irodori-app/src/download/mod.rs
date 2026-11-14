@@ -4,7 +4,12 @@
 mod error;
 mod fetch;
 mod hub;
+mod install;
 
 pub use error::DownloadError;
 pub use fetch::{partial_path, Transfer};
 pub use hub::{host_allowed, HostPolicy, Hub, PlannedFile, RepoPlan, HF_BASE};
+pub use install::{
+    approximate_bytes, install_model, install_with_space, APPROX_CODEC_BYTES, APPROX_MODEL_BYTES,
+    CODEC_FILES, MODEL_FILES,
+};

@@ -21,7 +21,7 @@ pub struct ModelFiles {
     pub codec: PathBuf,
 }
 
-fn repo_dir(hub: &Path, id: &str) -> PathBuf {
+pub(crate) fn repo_dir(hub: &Path, id: &str) -> PathBuf {
     hub.join(format!("models--{}", id.replace('/', "--")))
 }
 
@@ -67,6 +67,22 @@ pub fn locate(hub: &Path, model_id: &str) -> Option<ModelFiles> {
     .join("model.safetensors");
     let codec = snapshot_with(hub, CODEC_ID, &["weights.pth"])?.join("weights.pth");
     Some(ModelFiles { model, codec })
+}
+
+/// そのモデルのファイル（モデル本体とトークナイザ）が、どれかの snapshot にそろっているか。許可外は常に `false`。
+pub fn model_present(hub: &Path, model_id: &str) -> bool {
+    ALLOW_LIST.contains(&model_id)
+        && snapshot_with(
+            hub,
+            model_id,
+            &["model.safetensors", "tokenizer/tokenizer.json"],
+        )
+        .is_some()
+}
+
+/// 共通の codec が取得済みか。
+pub fn codec_present(hub: &Path) -> bool {
+    snapshot_with(hub, CODEC_ID, &["weights.pth"]).is_some()
 }
 
 /// すぐ使えるモデルの ID（許可リストの順）。
@@ -189,6 +205,22 @@ mod tests {
         ] {
             assert!(locate(hub.path(), id).is_none(), "{id:?}");
         }
+    }
+
+    #[test]
+    fn model_present_and_codec_present_look_at_one_repo_each() {
+        let hub = tempfile::tempdir().unwrap();
+        assert!(!model_present(hub.path(), SMALL) && !codec_present(hub.path()));
+        snapshot(hub.path(), SMALL, "aaaa1111", &MODEL_FILES);
+        assert!(model_present(hub.path(), SMALL));
+        assert!(!codec_present(hub.path()), "the codec is a separate repo");
+        assert!(!locate(hub.path(), SMALL).is_some(), "locate needs both");
+        snapshot(hub.path(), CODEC_ID, "cccc3333", &["weights.pth"]);
+        assert!(codec_present(hub.path()));
+        assert!(
+            !model_present(hub.path(), "someone/else"),
+            "outside the allow list"
+        );
     }
 
     #[test]
