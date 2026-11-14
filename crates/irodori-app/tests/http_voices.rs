@@ -770,13 +770,11 @@ async fn design_validation_errors_are_400() {
     assert!(state(&f).await["jobs"].as_array().unwrap().is_empty());
     let missing = fixture_with_voice(|s| s.missing_models(&[MF]));
     let r = post(&missing.app, "/api/design", design_values()).await;
-    assert_eq!(
-        (r.status, r.error()),
-        (
-            StatusCode::BAD_REQUEST,
-            "モデルがまだ取得されていません。".into()
-        )
-    );
+    // 未取得のモデルは誤りではなく、取得の確認を求める（ジョブは作らず、何も取得しない）。
+    assert_eq!(r.status, StatusCode::OK, "{}", r.error());
+    assert_eq!(r.json()["needs_model_download"], true);
+    assert_eq!(r.json()["model"], MF);
+    assert!(missing.installer.installs().is_empty());
 }
 
 #[tokio::test]

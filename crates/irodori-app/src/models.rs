@@ -12,6 +12,16 @@ pub const ALLOW_LIST: [&str; 3] = [
     "phasefield-audio/Irodori-TTS-v4.1-Anime",
     "Aratako/Irodori-TTS-v4.1-Small-MF",
 ];
+/// 画面に出すモデル名（`/api/state` の `models[].name` と同じ）。許可外は ID のまま。
+pub fn display_name(model_id: &str) -> &str {
+    match model_id {
+        "Aratako/Irodori-TTS-v4.1-Small" => "標準",
+        "phasefield-audio/Irodori-TTS-v4.1-Anime" => "Anime",
+        "Aratako/Irodori-TTS-v4.1-Small-MF" => "MF（高速）",
+        other => other,
+    }
+}
+
 /// 全モデル共通の codec。
 pub const CODEC_ID: &str = "Aratako/Semantic-DACVAE-Japanese-32dim";
 

@@ -279,6 +279,9 @@ async fn generate(State(app): State<AppState>, body: Bytes) -> ApiResult<Json<Va
         SubmitOutcome::NeedsLongConfirmation { long_cards } => Ok(Json(
             json!({"needs_long_confirmation": true, "long_cards": long_cards}),
         )),
+        SubmitOutcome::NeedsModelDownload { model } => {
+            Ok(Json(crate::models_api::needs_download(&app, &model)))
+        }
     }
 }
 

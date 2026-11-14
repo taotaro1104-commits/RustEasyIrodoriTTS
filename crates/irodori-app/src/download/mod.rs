@@ -5,6 +5,8 @@ mod error;
 mod fetch;
 mod hub;
 mod install;
+mod installer;
+mod real;
 
 pub use error::DownloadError;
 pub use fetch::{partial_path, Transfer};
@@ -13,3 +15,5 @@ pub use install::{
     approximate_bytes, install_model, install_with_space, APPROX_CODEC_BYTES, APPROX_MODEL_BYTES,
     CODEC_FILES, MODEL_FILES,
 };
+pub use installer::{DownloadControl, ModelInstaller};
+pub use real::RealInstaller;

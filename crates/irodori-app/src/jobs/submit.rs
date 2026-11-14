@@ -2,8 +2,6 @@
 
 use std::collections::HashSet;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicUsize};
-use std::sync::Arc;
 
 use irodori_store::dictionary::{self, Dictionary};
 use irodori_store::model::{uid, Project};
@@ -12,7 +10,7 @@ use irodori_store::splitter::estimate;
 use irodori_store::{Result, StoreError};
 use serde_json::{json, Value};
 
-use super::{Job, JobManager, Kind, Request, SubmitOutcome, Watch, Work, BUSY};
+use super::{Job, JobManager, Kind, Request, SubmitOutcome, Work, BUSY};
 use crate::settings_map::{effective_steps, options_from};
 use crate::synth::SynthError;
 
@@ -29,6 +27,18 @@ pub(super) fn from_synth(e: SynthError) -> StoreError {
         SynthError::Invalid(m) => StoreError::Invalid(m),
         SynthError::Cancelled => StoreError::Invalid("停止しました。".into()),
         SynthError::Failed(d) => StoreError::Internal(d),
+    }
+}
+
+/// 受け付けの途中で止まる理由。
+pub(super) enum Stop {
+    Error(StoreError),
+    NeedsModel(String),
+}
+
+impl From<StoreError> for Stop {
+    fn from(e: StoreError) -> Stop {
+        Stop::Error(e)
     }
 }
 
@@ -57,7 +67,13 @@ impl JobManager {
         }
         let dict = dictionary::load_lenient(store.root())?;
         let options = options_from(&doc.generation).map_err(from_synth)?;
-        let requests = self.snapshot(&doc, &dict, cid, changed)?;
+        let requests = match self.snapshot(&doc, &dict, cid, changed) {
+            Ok(requests) => requests,
+            Err(Stop::NeedsModel(model)) => {
+                return Ok(SubmitOutcome::NeedsModelDownload { model });
+            }
+            Err(Stop::Error(e)) => return Err(e),
+        };
         if requests.is_empty() {
             return Err(invalid(
                 "生成対象がありません。文章と生成状態を確認してください。",
@@ -82,22 +98,11 @@ impl JobManager {
         let requests: Vec<Request> = requests.into_iter().map(|(_, r, _)| r).collect();
         let ids: HashSet<String> = requests.iter().map(|r| r.card_id.clone()).collect();
         let job = Job {
-            id: uid(),
-            kind: Kind::Generate,
             project: Some(pid.to_string()),
-            status: "待機中".into(),
-            done: 0,
             total: requests.len(),
-            error: String::new(),
             steps: effective_steps(&options, &requests[0].model),
-            cancel: Arc::new(AtomicBool::new(false)),
-            progress: Arc::new(AtomicUsize::new(0)),
-            stage: Arc::new(AtomicUsize::new(0)),
-            watch: Watch::new(),
             pending: requests.iter().map(|r| r.card_id.clone()).collect(),
-            assets: Vec::new(),
-            creation: Value::Null,
-            record: None,
+            ..Job::new(uid(), Kind::Generate)
         };
         let work = Work::Cards {
             job_id: job.id.clone(),
@@ -136,7 +141,7 @@ impl JobManager {
         dict: &Dictionary,
         cid: Option<&str>,
         changed: bool,
-    ) -> Result<Vec<(usize, Request, usize)>> {
+    ) -> std::result::Result<Vec<(usize, Request, usize)>, Stop> {
         let store = &self.inner.store;
         let (voices, settings) = (store.voices(), store.settings());
         let settings_json =
@@ -167,12 +172,13 @@ impl JobManager {
                 StoreError::Invalid(format!("{ordinal}番のカードの話者を選んでください。"))
             })?;
             if !self.inner.synth.model_available(&voice.model) {
-                return Err(invalid("モデルがまだ取得されていません。"));
+                return Err(Stop::NeedsModel(voice.model.clone()));
             }
             if (card.speed - 1.0).abs() > 1e-9 {
                 return Err(invalid(
                     "話速の変更はこの版ではまだ使えません。話速を1.0倍にしてください。",
-                ));
+                )
+                .into());
             }
             let sig = signature(doc, card, dict, Some(voice));
             let text = reading_text(doc, card, dict);

@@ -2,7 +2,7 @@
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use irodori_store::dictionary::Dictionary;
@@ -13,7 +13,7 @@ use irodori_store::{Result, StoreError};
 use serde_json::{json, Map, Value};
 
 use super::submit::from_synth;
-use super::{Inner, Job, JobManager, Kind, Watch, Work, BUSY, GENERIC_FAILURE};
+use super::{Inner, Job, JobManager, Kind, Work, BUSY, GENERIC_FAILURE};
 use crate::models::ALLOW_LIST;
 use crate::settings_map::{effective_steps, options_from};
 use crate::synth::{SynthError, SynthJob};
@@ -26,6 +26,26 @@ const MAX_CANDIDATES: f64 = 8.0;
 
 fn invalid(message: &str) -> StoreError {
     StoreError::Invalid(message.into())
+}
+
+/// 声の試作の受け付けの結果。
+#[derive(Debug, Clone, PartialEq)]
+pub enum DesignSubmit {
+    /// 始めた（ジョブの ID）。
+    Started(String),
+    /// モデルが未取得。画面が確認したうえで取得を頼む。ジョブは作らない。
+    NeedsModelDownload(String),
+}
+
+#[cfg(test)]
+impl DesignSubmit {
+    /// 始めたジョブの ID（テスト用。始まっていなければ panic）。
+    pub fn id(self) -> String {
+        match self {
+            DesignSubmit::Started(id) => id,
+            other => panic!("the design did not start: {other:?}"),
+        }
+    }
 }
 
 /// 声の作り方。
@@ -97,7 +117,11 @@ fn candidates_of(value: Option<&Value>) -> Result<usize> {
 
 impl JobManager {
     /// 声の試作を受け付ける。`registration` なら、文章は登録用の定型文に置き換える。戻り値はジョブの ID。
-    pub fn submit_design(&self, values: &Map<String, Value>, registration: bool) -> Result<String> {
+    pub fn submit_design(
+        &self,
+        values: &Map<String, Value>,
+        registration: bool,
+    ) -> Result<DesignSubmit> {
         let _gate = self.gate.lock().unwrap_or_else(|e| e.into_inner());
         if self.busy() {
             return Err(invalid("現在の生成が終わってから実行してください。"));
@@ -148,7 +172,7 @@ impl JobManager {
             .ok_or_else(|| invalid("使用するモデルを選んでください。"))?
             .to_string();
         if !self.inner.synth.model_available(&model) {
-            return Err(invalid("モデルがまだ取得されていません。"));
+            return Ok(DesignSubmit::NeedsModelDownload(model));
         }
         let candidates = candidates_of(values.get("candidates"))?;
         let steps = effective_steps(&options_from(&generation).map_err(from_synth)?, &model);
@@ -175,22 +199,9 @@ impl JobManager {
         };
 
         let job = Job {
-            id: uid(),
-            kind: Kind::Design,
-            project: None,
-            status: "待機中".into(),
-            done: 0,
-            total: 1,
-            error: String::new(),
             steps,
-            cancel: Arc::new(AtomicBool::new(false)),
-            progress: Arc::new(AtomicUsize::new(0)),
-            stage: Arc::new(AtomicUsize::new(0)),
-            watch: Watch::new(),
-            pending: Vec::new(),
-            assets: Vec::new(),
             creation: request.creation.clone(),
-            record: None,
+            ..Job::new(uid(), Kind::Design)
         };
         let id = job.id.clone();
         {
@@ -210,7 +221,7 @@ impl JobManager {
                 request,
             })
             .map_err(|_| StoreError::Internal("worker stopped".into()))?;
-        Ok(id)
+        Ok(DesignSubmit::Started(id))
     }
 
     /// 完了した試作ジョブの `(候補の鍵, 話者の creation にする記録)`。完了していなければ `None`。

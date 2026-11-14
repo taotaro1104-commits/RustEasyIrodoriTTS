@@ -23,6 +23,7 @@ pub(super) fn worker(inner: Arc<Inner>, rx: Receiver<Work>) {
                 requests,
             } => run_work(&inner, &job_id, &project, &requests),
             Work::Design { job_id, request } => super::design::run(&inner, &job_id, request),
+            Work::Download { job_id, model } => super::download::run(&inner, &job_id, &model),
         }
     }
 }

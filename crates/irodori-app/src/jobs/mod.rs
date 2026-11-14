@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
@@ -17,13 +17,18 @@ use serde_json::{json, Value};
 
 use irodori_core::control::Stage;
 
+use crate::download::ModelInstaller;
 use crate::synth::Synthesizer;
 
-pub use design::{DesignMode, DesignRequest, REGISTRATION_SAMPLE_TEXT};
+pub use design::{DesignMode, DesignRequest, DesignSubmit, REGISTRATION_SAMPLE_TEXT};
 
 mod design;
 #[cfg(test)]
 mod design_tests;
+mod download;
+#[cfg(test)]
+mod download_tests;
+mod job;
 mod run;
 mod submit;
 #[cfg(test)]
@@ -46,6 +51,10 @@ pub enum SubmitOutcome {
     NeedsLongConfirmation {
         long_cards: Vec<usize>,
     },
+    /// 話者のモデルが未取得。画面が確認したうえで取得（`/api/models/download`）を頼む。ジョブもカードの状態も変えない。
+    NeedsModelDownload {
+        model: String,
+    },
 }
 
 /// 提出時点のスナップショット 1 件（カード 1 枚分）。
@@ -63,63 +72,7 @@ pub(crate) struct Request {
     pub record: Value,
 }
 
-/// ジョブの種類。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Kind {
-    Generate,
-    Design,
-}
-
-impl Kind {
-    fn name(self) -> &'static str {
-        match self {
-            Kind::Generate => "generate",
-            Kind::Design => "design",
-        }
-    }
-}
-
-pub(crate) struct Job {
-    pub id: String,
-    pub kind: Kind,
-    /// 生成ジョブの台本の ID。声の試作では `None`。
-    pub project: Option<String>,
-    pub status: String,
-    pub done: usize,
-    pub total: usize,
-    pub error: String,
-    pub steps: usize,
-    pub cancel: Arc<AtomicBool>,
-    pub progress: Arc<AtomicUsize>,
-    pub stage: Arc<AtomicUsize>,
-    /// 止まり（長い間、ステップも段階も変わらない）を見つけるための記録。
-    pub watch: Watch,
-    /// まだ処理していないカードの ID（順番どおり）。
-    pub pending: Vec<String>,
-    /// 声の試作の候補（登録簿の鍵）。
-    pub assets: Vec<String>,
-    /// 声の試作の依頼（画面から受け取った値）。
-    pub creation: Value,
-    /// 声の試作の記録（完了後）。
-    pub record: Option<Value>,
-}
-
-/// 最後に見た `(ステップ, 段階)` と、それが変わらなくなってからの時間。
-pub(crate) struct Watch {
-    seen: (usize, usize),
-    since: Instant,
-    warned: bool,
-}
-
-impl Watch {
-    pub fn new() -> Watch {
-        Watch {
-            seen: (0, 0),
-            since: Instant::now(),
-            warned: false,
-        }
-    }
-}
+pub(crate) use job::{Job, Kind, Watch};
 
 pub(crate) enum Work {
     Cards {
@@ -131,6 +84,10 @@ pub(crate) enum Work {
         job_id: String,
         request: DesignRequest,
     },
+    Download {
+        job_id: String,
+        model: String,
+    },
 }
 
 pub(crate) struct Inner {
@@ -138,6 +95,8 @@ pub(crate) struct Inner {
     pub synth: Arc<dyn Synthesizer>,
     /// 声の試作の候補を載せる登録簿。
     pub assets: Arc<Assets>,
+    /// モデルの取得（本物か、テスト用の擬似）。
+    pub installer: Arc<dyn ModelInstaller>,
     jobs: Mutex<Vec<Job>>,
     /// カードの状態・結果を保存できなかったときの理由（ジョブが「完了」と報告しないために、ワーカーが拾う）。
     save_error: Mutex<Option<String>>,
@@ -151,7 +110,12 @@ impl Inner {
     /// 生成中のジョブのうち、`threshold` 以上ステップも段階も変わっていないものを、止まりとして 1 度だけ知らせる。
     pub fn check_stalls(&self, now: Instant, threshold: Duration) -> Vec<String> {
         let mut found = Vec::new();
-        for job in self.jobs().iter_mut().filter(|j| j.status == "生成中") {
+        // 取得（download）はステップも段階も動かない種類なので、止まりの検出の対象にしない。
+        for job in self
+            .jobs()
+            .iter_mut()
+            .filter(|j| j.status == "生成中" && j.kind != Kind::Download)
+        {
             let current = (
                 job.progress.load(Ordering::SeqCst),
                 job.stage.load(Ordering::SeqCst),
@@ -206,11 +170,17 @@ pub struct JobManager {
 }
 
 impl JobManager {
-    pub fn new(store: Arc<Store>, synth: Arc<dyn Synthesizer>, assets: Arc<Assets>) -> JobManager {
+    pub fn new(
+        store: Arc<Store>,
+        synth: Arc<dyn Synthesizer>,
+        assets: Arc<Assets>,
+        installer: Arc<dyn ModelInstaller>,
+    ) -> JobManager {
         let inner = Arc::new(Inner {
             store,
             synth,
             assets,
+            installer,
             jobs: Mutex::new(Vec::new()),
             save_error: Mutex::new(None),
         });
@@ -278,6 +248,7 @@ impl JobManager {
                 json!({
                     "id": j.id, "project": j.project, "status": j.status, "done": j.done, "total": j.total, "error": j.error,
                     "stopping": j.cancel.load(Ordering::SeqCst), "kind": j.kind.name(), "assets": j.assets,
+                    "model": j.model, "bytes_done": j.bytes_done.load(Ordering::SeqCst), "bytes_total": j.bytes_total.load(Ordering::SeqCst),
                     "step": j.progress.load(Ordering::SeqCst), "steps": j.steps,
                     "stage": Stage::from_usize(j.stage.load(Ordering::SeqCst)).name(),
                 })
