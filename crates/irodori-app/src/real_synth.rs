@@ -88,6 +88,7 @@ impl RealSynth {
             dtype: dtype(key.1),
             codec_dtype: dtype(key.2),
             memory: MemoryMode::Staged,
+            dit_quant: None,
         };
         let runtime = Arc::new(Runtime::new(move || {
             Pipeline::load_with(&files.model, &files.codec, &Device::Cpu, options.clone())

@@ -58,6 +58,9 @@ pub struct ModelConfig {
     pub max_text_len: usize,
     pub max_caption_len: Option<usize>,
     pub ref_max_seconds: f64,
+    /// DiT ブロックの線形層を量子化する種類（モデルファイルの設定ではなく、読み込み時の選択）。
+    #[serde(skip)]
+    pub dit_quant: Option<crate::nn::qlinear::QuantKind>,
 }
 
 impl Default for ModelConfig {
@@ -110,6 +113,7 @@ impl Default for ModelConfig {
             max_text_len: 256,
             max_caption_len: None,
             ref_max_seconds: 120.0,
+            dit_quant: None,
         }
     }
 }
