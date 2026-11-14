@@ -1,5 +1,6 @@
 //! モデルと codec の導入。HF キャッシュ互換のフォルダへ置き、各リポジトリの最後に `refs/main` を書く。
 
+use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
 
 use irodori_store::storage::atomic_write;
@@ -11,11 +12,7 @@ use crate::models::{self, ALLOW_LIST, CODEC_ID};
 pub const APPROX_MODEL_BYTES: u64 = 3_100_000_000;
 pub const APPROX_CODEC_BYTES: u64 = 430_000_000;
 /// 取得するファイル（固定。サーバが返す一覧は、ここにあるものだけを使う）。
-pub const MODEL_FILES: [&str; 3] = [
-    "model.safetensors",
-    "tokenizer/tokenizer.json",
-    "tokenizer/tokenizer_config.json",
-];
+pub const MODEL_FILES: [&str; 3] = models::MODEL_REQUIRED_FILES;
 pub const CODEC_FILES: [&str; 1] = ["weights.pth"];
 /// 必要な空き容量の余裕（残りのバイト数に掛ける）。
 const SPACE_MARGIN: f64 = 1.2;
@@ -38,7 +35,7 @@ pub fn approximate_bytes(hub_dir: &Path, model_id: &str) -> u64 {
     model + codec
 }
 
-/// 実際の空き容量（`fs4`）で導入する。空き容量を調べられなければ、止めずに進める。
+/// 実際の空き容量（`fs4`）で導入する。空き容量を調べられなければ（ネットワークドライブ等）、警告を残して進める。
 pub fn install_model(
     hub: &Hub,
     hub_dir: &Path,
@@ -47,7 +44,10 @@ pub fn install_model(
     on_total: &dyn Fn(u64),
 ) -> Result<(), DownloadError> {
     install_with_space(hub, hub_dir, model_id, transfer, on_total, &|path| {
-        fs4::available_space(path).unwrap_or(u64::MAX)
+        fs4::available_space(path).unwrap_or_else(|e| {
+            tracing::warn!("cannot read the free disk space, continuing: {e}");
+            u64::MAX
+        })
     })
 }
 
@@ -65,6 +65,8 @@ pub fn install_with_space(
             "model not allowed: {model_id:?}"
         )));
     }
+    // 同じ置き場への取得は 1 つだけ（二重起動で書きかけが混ざらないように）。終わるまで持つ。
+    let _lock = acquire_lock(hub_dir)?;
     let mut wanted: Vec<(&str, &[&str])> = Vec::new();
     if !models::model_present(hub_dir, model_id) {
         wanted.push((model_id, &MODEL_FILES));
@@ -81,20 +83,10 @@ pub fn install_with_space(
         plans.push(hub.plan(repo, files)?);
     }
 
-    // まだ完成していないファイルの合計と、そのうち書きかけとして残っている分。
-    let (mut missing, mut kept) = (0u64, 0u64);
     for plan in &plans {
-        for file in &plan.files {
-            let dest = snapshot_dir(hub_dir, plan).join(&file.path);
-            if is_complete(&dest, file.size) {
-                continue;
-            }
-            missing += file.size;
-            kept += std::fs::metadata(super::partial_path(&dest))
-                .map(|m| m.len().min(file.size))
-                .unwrap_or(0);
-        }
+        remove_stale_partials(hub_dir, plan);
     }
+    let (missing, kept) = measure(hub_dir, &plans);
     on_total(missing);
     let needed = ((missing - kept) as f64 * SPACE_MARGIN).ceil() as u64;
     let free = available(&nearest_existing_dir(hub_dir));
@@ -106,22 +98,55 @@ pub fn install_with_space(
     }
 
     for plan in &plans {
-        let snapshot = snapshot_dir(hub_dir, plan);
+        fetch_repo(hub, hub_dir, plan, transfer)?;
+    }
+    Ok(())
+}
+
+/// まだ完成していないファイルの合計と、そのうち書きかけとして残っている分。
+fn measure(hub_dir: &Path, plans: &[RepoPlan]) -> (u64, u64) {
+    let (mut missing, mut kept) = (0u64, 0u64);
+    for plan in plans {
         for file in &plan.files {
-            let dest = snapshot.join(&file.path);
+            let dest = snapshot_dir(hub_dir, plan).join(&file.path);
             if is_complete(&dest, file.size) {
                 continue;
             }
+            missing += file.size;
+            kept += std::fs::metadata(super::partial_path(&dest))
+                .map(|m| m.len().min(file.size))
+                .unwrap_or(0);
+        }
+    }
+    (missing, kept)
+}
+
+/// 1 つのリポジトリの未完成のファイルを取得し、全部が検証済みになってから最後に `refs/main` を書く。
+fn fetch_repo(
+    hub: &Hub,
+    hub_dir: &Path,
+    plan: &RepoPlan,
+    transfer: &Transfer,
+) -> Result<(), DownloadError> {
+    let snapshot = snapshot_dir(hub_dir, plan);
+    for file in &plan.files {
+        let dest = snapshot.join(&file.path);
+        if !is_complete(&dest, file.size) {
             hub.fetch(&plan.repo, &plan.sha, file, &dest, transfer)?;
         }
-        // 全ファイルが検証済みになってから、最後に印を書く。
-        let refs = models::repo_dir(hub_dir, &plan.repo)
-            .join("refs")
-            .join("main");
-        atomic_write(&refs, &format!("{}\n", plan.sha))
-            .map_err(|e| DownloadError::Io(e.message().to_string()))?;
     }
-    Ok(())
+    let refs = models::repo_dir(hub_dir, &plan.repo)
+        .join("refs")
+        .join("main");
+    atomic_write(
+        &refs,
+        &format!(
+            "{}
+",
+            plan.sha
+        ),
+    )
+    .map_err(|e| DownloadError::Io(e.message().to_string()))
 }
 
 fn snapshot_dir(hub_dir: &Path, plan: &RepoPlan) -> PathBuf {
@@ -130,8 +155,58 @@ fn snapshot_dir(hub_dir: &Path, plan: &RepoPlan) -> PathBuf {
         .join(&plan.sha)
 }
 
+/// 通常のファイルで、大きさが合うか（シンボリックリンクは完成とみなさない）。
 fn is_complete(dest: &Path, size: u64) -> bool {
-    std::fs::metadata(dest).is_ok_and(|m| m.is_file() && m.len() == size)
+    std::fs::symlink_metadata(dest).is_ok_and(|m| m.is_file() && m.len() == size)
+}
+
+/// `<hub>/.locks/` は HF のキャッシュも使う置き場。ここにアプリ専用のロックを置く。
+fn acquire_lock(hub_dir: &Path) -> Result<File, DownloadError> {
+    let dir = hub_dir.join(".locks");
+    std::fs::create_dir_all(&dir)?;
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(dir.join("irodori-app-download.lock"))?;
+    match file.try_lock() {
+        Ok(()) => Ok(file),
+        Err(TryLockError::WouldBlock) => Err(DownloadError::Locked),
+        Err(TryLockError::Error(e)) => Err(e.into()),
+    }
+}
+
+/// 別のコミットの書きかけ（`*.incomplete`）は、再開に使えず空き容量を圧迫するので消す。
+fn remove_stale_partials(hub_dir: &Path, plan: &RepoPlan) {
+    let snapshots = models::repo_dir(hub_dir, &plan.repo).join("snapshots");
+    let Ok(entries) = std::fs::read_dir(&snapshots) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if entry.file_name() == plan.sha.as_str() {
+            continue;
+        }
+        remove_partials_under(&entry.path());
+    }
+}
+
+fn remove_partials_under(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if kind.is_dir() {
+            remove_partials_under(&path);
+        } else if path.extension().is_some_and(|x| x == "incomplete") {
+            if let Err(e) = std::fs::remove_file(&path) {
+                tracing::warn!("cannot remove a stale partial file: {e}");
+            }
+        }
+    }
 }
 
 /// まだ作っていないフォルダでも、書き込み先のドライブを調べられるように、実在する最も近い親を返す。

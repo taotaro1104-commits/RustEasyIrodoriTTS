@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use irodori_app::download::{
-    approximate_bytes, install_model, install_with_space, DownloadError, HostPolicy, Hub, Transfer,
-    APPROX_CODEC_BYTES, APPROX_MODEL_BYTES,
+    approximate_bytes, install_model, install_with_space, DownloadControl, DownloadError,
+    HostPolicy, Hub, ModelInstaller, RealInstaller, Transfer, APPROX_CODEC_BYTES,
+    APPROX_MODEL_BYTES,
 };
 use irodori_app::models::{locate, CODEC_ID};
 use support::fake_hub::{FakeFile, FakeHub, SHA};
@@ -83,6 +84,9 @@ fn all_files(root: &Path) -> Vec<String> {
     fn walk(dir: &Path, root: &Path, out: &mut Vec<String>) {
         for entry in std::fs::read_dir(dir).unwrap().flatten() {
             let path = entry.path();
+            if entry.file_name() == ".locks" {
+                continue; // アプリのロック置き場（HF キャッシュ互換の `.locks`）
+            }
             if path.is_dir() {
                 walk(&path, root, out);
             } else {
@@ -392,4 +396,70 @@ fn a_cancelled_install_keeps_partial_files_but_is_not_installed() {
     assert_eq!(err, DownloadError::Cancelled);
     assert!(locate(&hub_dir, MODEL).is_none());
     assert!(!repo_dir(&hub_dir, MODEL).join("refs/main").exists());
+}
+
+#[test]
+fn a_stale_partial_from_an_older_commit_is_removed() {
+    let server = FakeHub::start(files());
+    let dir = tempfile::tempdir().unwrap();
+    let hub_dir = dir.path().join("hub");
+    let old = repo_dir(&hub_dir, MODEL)
+        .join("snapshots")
+        .join("0ldc0mm1t");
+    std::fs::create_dir_all(&old).unwrap();
+    std::fs::write(old.join("model.safetensors.incomplete"), vec![1u8; 1000]).unwrap();
+    Run::new().install(&server, &hub_dir).unwrap();
+    assert!(
+        !old.join("model.safetensors.incomplete").exists(),
+        "{:?}",
+        all_files(&hub_dir)
+    );
+    assert!(locate(&hub_dir, MODEL).is_some());
+}
+
+#[test]
+fn a_second_install_into_the_same_folder_is_refused_while_one_runs() {
+    let server = FakeHub::start(files());
+    let dir = tempfile::tempdir().unwrap();
+    let hub_dir = dir.path().join("hub");
+    server.stall_after(1_000_000);
+    std::thread::scope(|scope| {
+        let first = scope.spawn(|| Run::new().install(&server, &hub_dir));
+        let started = std::time::Instant::now();
+        while server.requests_matching("/resolve/").is_empty() {
+            assert!(
+                started.elapsed().as_secs() < 20,
+                "the first install never started fetching"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let second = Run::new().install(&server, &hub_dir);
+        assert_eq!(second, Err(DownloadError::Locked));
+        // 解放すると偽サーバは接続を切る（最初の取得は途中で終わる）。
+        server.release();
+        assert_eq!(first.join().unwrap(), Err(DownloadError::Offline));
+    });
+    // 終わればロックは外れ、続きから取得できる。
+    server.clear_faults();
+    Run::new().install(&server, &hub_dir).unwrap();
+    assert!(locate(&hub_dir, MODEL).is_some());
+}
+
+#[test]
+fn the_installer_estimate_is_cached_and_refreshed_after_an_install() {
+    let server = FakeHub::start(files());
+    let dir = tempfile::tempdir().unwrap();
+    let hub_dir = dir.path().join("hub");
+    let installer = RealInstaller::with_hub(hub_dir.clone(), hub(&server));
+    let before = installer.approximate_bytes(MODEL);
+    assert_eq!(before, APPROX_MODEL_BYTES + APPROX_CODEC_BYTES);
+    // 画面の状態の取得のたびに調べ直さない（短い間は同じ値）。
+    place(&hub_dir, CODEC_ID, "weights.pth", b"x");
+    assert_eq!(installer.approximate_bytes(MODEL), before);
+    installer.install(MODEL, &DownloadControl::new()).unwrap();
+    assert_eq!(
+        installer.approximate_bytes(MODEL),
+        0,
+        "refreshed by the install"
+    );
 }

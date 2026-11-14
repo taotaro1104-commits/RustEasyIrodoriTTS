@@ -161,3 +161,24 @@ fn disk_space_and_other_messages_are_japanese() {
     );
     assert_eq!(DownloadError::Protocol("secret".into()).message(), generic);
 }
+
+#[test]
+fn plan_refuses_weight_files_without_a_sha256() {
+    for (path, wanted) in [
+        ("model.safetensors", "model.safetensors"),
+        ("weights.pth", "weights.pth"),
+    ] {
+        let server = FakeHub::start(vec![FakeFile::new(REPO, path, &[1u8; 100], false)]);
+        let err = hub(&server).plan(REPO, &[wanted]).unwrap_err();
+        assert!(matches!(err, DownloadError::Protocol(_)), "{path}: {err:?}");
+    }
+}
+
+#[test]
+fn plan_still_accepts_small_text_files_without_a_sha256() {
+    let server = FakeHub::start(files());
+    let plan = hub(&server)
+        .plan(REPO, &["tokenizer/tokenizer.json"])
+        .unwrap();
+    assert_eq!(plan.files[0].sha256, None);
+}

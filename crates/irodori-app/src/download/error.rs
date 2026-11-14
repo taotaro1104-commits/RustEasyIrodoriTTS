@@ -17,6 +17,8 @@ pub enum DownloadError {
     DiskSpace { needed: u64, available: u64 },
     /// 利用者が中止した。
     Cancelled,
+    /// 同じモデル置き場へ、ほかの取得が進んでいる。
+    Locked,
     /// 取得元の応答が想定と違う（詳細はログ用）。
     Protocol(String),
     /// ファイルの読み書きの失敗（詳細はログ用）。
@@ -39,6 +41,10 @@ impl DownloadError {
             DownloadError::DiskSpace { needed, available } => {
                 let shortfall = needed.saturating_sub(*available) as f64 / 1e9;
                 format!("空き容量が足りません。あと約{shortfall:.1}GB 必要です。")
+            }
+            DownloadError::Locked => {
+                "ほかの取得がこのモデルの置き場所で進んでいます。終わってからもう一度お試しください。"
+                    .into()
             }
             DownloadError::Cancelled => "取得を中止しました。".into(),
             DownloadError::Protocol(_) | DownloadError::Io(_) => GENERIC.into(),

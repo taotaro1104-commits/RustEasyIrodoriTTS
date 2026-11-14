@@ -66,6 +66,10 @@ struct Behavior {
     decoys: bool,
     /// 先頭の N バイトだけ送り、そのあと止めて、解放の合図まで待つ（取消のテスト用）。
     stall_after: Option<usize>,
+    /// 計画より長い本文を、Content-Length なしで送る（上限のテスト用）。
+    oversize: bool,
+    /// 次の Range 付きの要求に 416 を 1 度だけ返す。
+    reject_range_once: bool,
 }
 
 struct Shared {
@@ -204,6 +208,16 @@ impl FakeHub {
     /// 先頭の N バイトを送ったあと、`release` が呼ばれるまで本文を止める。
     pub fn stall_after(&self, bytes: usize) {
         self.set(|b| b.stall_after = Some(bytes));
+    }
+
+    /// 本文を、計画のあとに余分なバイトを足して、Content-Length なしで送る。
+    pub fn oversize(&self) {
+        self.set(|b| b.oversize = true);
+    }
+
+    /// Range 付きの要求に 1 度だけ 416 を返す。
+    pub fn reject_range_once(&self) {
+        self.set(|b| b.reject_range_once = true);
     }
 
     pub fn release(&self) {
@@ -419,6 +433,29 @@ async fn serve_file(
     let Some(file) = files.iter().find(|f| f.repo == repo && f.path == path) else {
         return status_of(404);
     };
+    let (oversize, reject_once) = {
+        let mut s = shared.lock().unwrap();
+        let reject = s.behavior.reject_range_once && range.is_some();
+        if reject {
+            s.behavior.reject_range_once = false;
+        }
+        (s.behavior.oversize, reject)
+    };
+    if reject_once {
+        return status_of(416);
+    }
+    if oversize {
+        let mut bytes = file.bytes.clone();
+        bytes.extend(std::iter::repeat(0xAB).take(1_500_000));
+        let chunks = bytes
+            .chunks(64 * 1024)
+            .map(|c| Ok::<Vec<u8>, std::io::Error>(c.to_vec()))
+            .collect::<Vec<_>>();
+        return Response::builder()
+            .status(StatusCode::OK)
+            .body(Body::from_stream(futures_util::stream::iter(chunks)))
+            .unwrap();
+    }
     if html {
         let page = b"<html><body>Service temporarily unavailable</body></html>".to_vec();
         return ([(header::CONTENT_TYPE, "text/html")], page).into_response();
