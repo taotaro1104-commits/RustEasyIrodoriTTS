@@ -4,23 +4,24 @@
 //! KV の連結順は self, text[, speaker][, caption]。
 
 use candle_core::{DType, Device, Tensor};
-use candle_nn::{linear_no_bias, Linear, Module, VarBuilder};
+use candle_nn::{Module, VarBuilder};
 
 use crate::attention::masked_sdpa;
 use crate::nn::norm::RmsNorm;
+use crate::nn::qlinear::{linear_no_bias, QLinear, QuantKind};
 use crate::nn::rope::{apply_rotary_half, FreqsCis};
 use crate::{IrodoriError, Result};
 
 pub struct JointAttention {
-    wq: Linear,
-    wk: Linear,
-    wv: Linear,
-    wk_text: Linear,
-    wv_text: Linear,
-    speaker: Option<(Linear, Linear)>,
-    caption: Option<(Linear, Linear)>,
-    gate: Linear,
-    wo: Linear,
+    wq: QLinear,
+    wk: QLinear,
+    wv: QLinear,
+    wk_text: QLinear,
+    wv_text: QLinear,
+    speaker: Option<(QLinear, QLinear)>,
+    caption: Option<(QLinear, QLinear)>,
+    gate: QLinear,
+    wo: QLinear,
     q_norm: RmsNorm,
     k_norm: RmsNorm,
     heads: usize,
@@ -28,8 +29,8 @@ pub struct JointAttention {
     dim: usize,
 }
 
-fn kv_pair(in_dim: usize, out_dim: usize, vb: &VarBuilder, k: &str, v: &str) -> Result<(Linear, Linear)> {
-    Ok((linear_no_bias(in_dim, out_dim, vb.pp(k))?, linear_no_bias(in_dim, out_dim, vb.pp(v))?))
+fn kv_pair(in_dim: usize, out_dim: usize, vb: &VarBuilder, k: &str, v: &str, quant: Option<QuantKind>) -> Result<(QLinear, QLinear)> {
+    Ok((linear_no_bias(in_dim, out_dim, vb.pp(k), quant)?, linear_no_bias(in_dim, out_dim, vb.pp(v), quant)?))
 }
 
 /// `(B, S_self + ctx...)` の u8 キーマスクを作る。`self_mask=None` は全有効。
@@ -54,6 +55,7 @@ impl JointAttention {
         caption_ctx_dim: Option<usize>,
         eps: f64,
         vb: VarBuilder,
+        quant: Option<QuantKind>,
     ) -> Result<Self> {
         if heads == 0 || dim % heads != 0 || (dim / heads) % 2 != 0 {
             return Err(IrodoriError::InvalidConfig(format!(
@@ -61,19 +63,19 @@ impl JointAttention {
             )));
         }
         let head_dim = dim / heads;
-        let (wk_text, wv_text) = kv_pair(text_ctx_dim, dim, &vb, "wk_text", "wv_text")?;
-        let speaker = speaker_ctx_dim.map(|d| kv_pair(d, dim, &vb, "wk_speaker", "wv_speaker")).transpose()?;
-        let caption = caption_ctx_dim.map(|d| kv_pair(d, dim, &vb, "wk_caption", "wv_caption")).transpose()?;
+        let (wk_text, wv_text) = kv_pair(text_ctx_dim, dim, &vb, "wk_text", "wv_text", quant)?;
+        let speaker = speaker_ctx_dim.map(|d| kv_pair(d, dim, &vb, "wk_speaker", "wv_speaker", quant)).transpose()?;
+        let caption = caption_ctx_dim.map(|d| kv_pair(d, dim, &vb, "wk_caption", "wv_caption", quant)).transpose()?;
         Ok(Self {
-            wq: linear_no_bias(dim, dim, vb.pp("wq"))?,
-            wk: linear_no_bias(dim, dim, vb.pp("wk"))?,
-            wv: linear_no_bias(dim, dim, vb.pp("wv"))?,
+            wq: linear_no_bias(dim, dim, vb.pp("wq"), quant)?,
+            wk: linear_no_bias(dim, dim, vb.pp("wk"), quant)?,
+            wv: linear_no_bias(dim, dim, vb.pp("wv"), quant)?,
             wk_text,
             wv_text,
             speaker,
             caption,
-            gate: linear_no_bias(dim, dim, vb.pp("gate"))?,
-            wo: linear_no_bias(dim, dim, vb.pp("wo"))?,
+            gate: linear_no_bias(dim, dim, vb.pp("gate"), quant)?,
+            wo: linear_no_bias(dim, dim, vb.pp("wo"), quant)?,
             q_norm: RmsNorm::new(&[heads, head_dim], eps, vb.pp("q_norm"))?,
             k_norm: RmsNorm::new(&[heads, head_dim], eps, vb.pp("k_norm"))?,
             heads,
@@ -82,7 +84,7 @@ impl JointAttention {
         })
     }
 
-    fn project(&self, pair: &(Linear, Linear), ctx: &Tensor) -> Result<[Tensor; 2]> {
+    fn project(&self, pair: &(QLinear, QLinear), ctx: &Tensor) -> Result<[Tensor; 2]> {
         let (b, s, _) = ctx.dims3()?;
         let shape = (b, s, self.heads, self.head_dim);
         let k = self.k_norm.forward(&pair.0.forward(ctx)?.reshape(shape)?)?;
@@ -167,7 +169,7 @@ mod tests {
 
     fn attn(spk: bool, cap: bool) -> JointAttention {
         let vb = vb_from_spec(spec("", DIM, HEADS, 4, spk.then_some(6), cap.then_some(5)));
-        JointAttention::load(DIM, HEADS, 4, spk.then_some(6), cap.then_some(5), 1e-5, vb).unwrap()
+        JointAttention::load(DIM, HEADS, 4, spk.then_some(6), cap.then_some(5), 1e-5, vb, None).unwrap()
     }
 
     fn x(s: usize) -> Tensor {

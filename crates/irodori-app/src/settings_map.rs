@@ -8,13 +8,14 @@ use serde_json::Value;
 
 use crate::synth::SynthError;
 
-/// 許可リストのモデルと、既定のステップ数（RF は 40、MeanFlow は 4）。
+/// 許可リストのモデルと、既定のステップ数（RF は 24、MeanFlow は 4）。
+/// 上流の既定は RF 40 だが、40 の出力に最も近く CER も同等だった 24 にしている（docs/bench.md）。
 const MODEL_STEPS: [(&str, usize); 3] = [
-    ("Aratako/Irodori-TTS-v4.1-Small", 40),
-    ("phasefield-audio/Irodori-TTS-v4.1-Anime", 40),
+    ("Aratako/Irodori-TTS-v4.1-Small", 24),
+    ("phasefield-audio/Irodori-TTS-v4.1-Anime", 24),
     ("Aratako/Irodori-TTS-v4.1-Small-MF", 4),
 ];
-const DEFAULT_STEPS: usize = 40;
+const DEFAULT_STEPS: usize = 24;
 
 #[derive(Debug, Clone)]
 pub struct GenerationOptions {
@@ -265,10 +266,10 @@ mod tests {
 
     #[test]
     fn model_steps_for_the_allow_list_only() {
-        assert_eq!(model_steps("Aratako/Irodori-TTS-v4.1-Small"), Some(40));
+        assert_eq!(model_steps("Aratako/Irodori-TTS-v4.1-Small"), Some(24));
         assert_eq!(
             model_steps("phasefield-audio/Irodori-TTS-v4.1-Anime"),
-            Some(40)
+            Some(24)
         );
         assert_eq!(model_steps("Aratako/Irodori-TTS-v4.1-Small-MF"), Some(4));
         assert_eq!(model_steps("someone/else"), None);
@@ -289,7 +290,7 @@ mod tests {
                 &options_from(&default_generation()).unwrap(),
                 "Aratako/Irodori-TTS-v4.1-Small"
             ),
-            40
+            24
         );
         assert_eq!(
             effective_steps(

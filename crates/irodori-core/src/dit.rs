@@ -30,8 +30,8 @@ impl DiffusionBlock {
         let speaker = cfg.use_speaker_condition_resolved().then_some(cfg.speaker_dim);
         let caption = cfg.use_caption_condition.then(|| cfg.caption_dim_resolved());
         Ok(Self {
-            attention: JointAttention::load(cfg.model_dim, cfg.num_heads, cfg.text_dim, speaker, caption, cfg.norm_eps, vb.pp("attention"))?,
-            mlp: SwiGlu::new(cfg.model_dim, (cfg.model_dim as f64 * cfg.mlp_ratio) as usize, vb.pp("mlp"))?,
+            attention: JointAttention::load(cfg.model_dim, cfg.num_heads, cfg.text_dim, speaker, caption, cfg.norm_eps, vb.pp("attention"), cfg.dit_quant)?,
+            mlp: SwiGlu::new_quant(cfg.model_dim, (cfg.model_dim as f64 * cfg.mlp_ratio) as usize, vb.pp("mlp"), cfg.dit_quant)?,
             attention_adaln: LowRankAdaLn::new(cfg.model_dim, cfg.adaln_rank, cfg.norm_eps, vb.pp("attention_adaln"))?,
             mlp_adaln: LowRankAdaLn::new(cfg.model_dim, cfg.adaln_rank, cfg.norm_eps, vb.pp("mlp_adaln"))?,
         })
@@ -256,6 +256,15 @@ pub(crate) mod tests {
     }
 
     fn dit_with(meanflow: bool, dtype: candle_core::DType) -> Dit {
+        dit_built(meanflow, dtype, None)
+    }
+
+    /// K-quants で量子化した DiT（同じ重み）。
+    pub(crate) fn dit_quantized(quant: crate::nn::qlinear::QuantKind) -> Dit {
+        dit_built(false, candle_core::DType::F32, Some(quant))
+    }
+
+    fn dit_built(meanflow: bool, dtype: candle_core::DType, quant: Option<crate::nn::qlinear::QuantKind>) -> Dit {
         let mut sp: Vec<(String, Vec<usize>)> = vec![
             ("cond_module.0.weight".into(), vec![DIM, 4]),
             ("cond_module.2.weight".into(), vec![DIM, DIM]),
@@ -276,6 +285,7 @@ pub(crate) mod tests {
             sp.extend(adaln(&format!("{p}mlp_adaln"), 2));
         }
         let mut c = cfg();
+        c.dit_quant = quant;
         if meanflow {
             c.flow_parameterization = "meanflow".into();
             sp.push(("delta_cond_module.0.weight".into(), vec![DIM, 4]));
@@ -311,6 +321,29 @@ pub(crate) mod tests {
         let y = dit().forward_with_encoded_conditions(&x_t(), &t(), &conds("txt"), None, None).unwrap();
         assert_eq!(y.dims(), &[1, 5, LATENT]);
         assert!(y.flatten_all().unwrap().to_vec1::<f32>().unwrap().iter().all(|v| v.is_finite()));
+    }
+
+    #[test]
+    fn quantized_dit_stays_close_to_the_dense_dit() {
+        use crate::nn::qlinear::QuantKind;
+        let dense = dit().forward_with_encoded_conditions(&x_t(), &t(), &conds("txt"), None, None).unwrap();
+        let norm = dense.sqr().unwrap().mean_all().unwrap().to_scalar::<f32>().unwrap().sqrt();
+        for (kind, limit) in [(QuantKind::Q6K, 0.05f32), (QuantKind::Q5K, 0.10), (QuantKind::Q4K, 0.20)] {
+            let q = dit_quantized(kind).forward_with_encoded_conditions(&x_t(), &t(), &conds("txt"), None, None).unwrap();
+            assert_eq!(q.dims(), dense.dims());
+            let err = (&q - &dense).unwrap().sqr().unwrap().mean_all().unwrap().to_scalar::<f32>().unwrap().sqrt() / norm;
+            assert!(err < limit, "{kind:?}: relative error {err}");
+        }
+    }
+
+    #[test]
+    fn quantized_dit_kv_cache_equals_uncached() {
+        let d = dit_quantized(crate::nn::qlinear::QuantKind::Q6K);
+        let c = conds("txt");
+        let cache = d.build_context_kv_cache(&c).unwrap();
+        let a = d.forward_with_encoded_conditions(&x_t(), &t(), &c, None, None).unwrap();
+        let b = d.forward_with_encoded_conditions(&x_t(), &t(), &c, None, Some(&cache)).unwrap();
+        crate::golden::assert_close(&a, &b, 1e-5, 0.0).unwrap();
     }
 
     #[test]

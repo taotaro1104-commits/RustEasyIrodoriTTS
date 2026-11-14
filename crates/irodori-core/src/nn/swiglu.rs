@@ -1,23 +1,29 @@
 //! SwiGLU MLP: `w2(silu(w1 x) * w3 x)`。
 
 use candle_core::Tensor;
-use candle_nn::{linear_no_bias, Linear, Module, VarBuilder};
+use candle_nn::{Module, VarBuilder};
 
+use super::qlinear::{linear_no_bias, QLinear, QuantKind};
 use crate::Result;
 
 #[derive(Debug, Clone)]
 pub struct SwiGlu {
-    w1: Linear,
-    w2: Linear,
-    w3: Linear,
+    w1: QLinear,
+    w2: QLinear,
+    w3: QLinear,
 }
 
 impl SwiGlu {
     pub fn new(dim: usize, hidden_dim: usize, vb: VarBuilder) -> Result<Self> {
+        Self::new_quant(dim, hidden_dim, vb, None)
+    }
+
+    /// `quant` があれば 3 つの線形層を量子化する（`w2` の入力次元が 256 の倍数でなくても 0 詰めで扱う）。
+    pub fn new_quant(dim: usize, hidden_dim: usize, vb: VarBuilder, quant: Option<QuantKind>) -> Result<Self> {
         Ok(Self {
-            w1: linear_no_bias(dim, hidden_dim, vb.pp("w1"))?,
-            w2: linear_no_bias(hidden_dim, dim, vb.pp("w2"))?,
-            w3: linear_no_bias(dim, hidden_dim, vb.pp("w3"))?,
+            w1: linear_no_bias(dim, hidden_dim, vb.pp("w1"), quant)?,
+            w2: linear_no_bias(hidden_dim, dim, vb.pp("w2"), quant)?,
+            w3: linear_no_bias(dim, hidden_dim, vb.pp("w3"), quant)?,
         })
     }
 

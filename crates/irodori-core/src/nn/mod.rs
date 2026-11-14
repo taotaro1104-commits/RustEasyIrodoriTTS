@@ -1,5 +1,6 @@
 //! DiT の基本部品（上流 `model.py` 37–120, 428–437 行の移植）。
 pub mod adaln;
+pub mod qlinear;
 pub mod norm;
 pub mod rope;
 pub mod swiglu;

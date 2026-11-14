@@ -17,6 +17,7 @@ use crate::control::{Control, Stage};
 use crate::dit::Dit;
 use crate::duration::DurationPredictor;
 use crate::loader::Weights;
+use crate::nn::qlinear::QuantKind;
 use crate::normalize::normalize_text;
 use crate::sampler::{initial_noise, sample_euler_cfg_ctl, sample_meanflow_ctl, SamplerParams};
 use crate::text_tokenizer::TextTokenizer;
@@ -197,11 +198,22 @@ pub struct PipelineOptions {
     /// codec の重みの dtype（入出力は常に F32）。
     pub codec_dtype: DType,
     pub memory: MemoryMode,
+    /// DiT ブロックの線形層を K-quants で量子化する（読み込みのたびに量子化するので、ロードは遅くなる）。F32 のときだけ。
+    pub dit_quant: Option<QuantKind>,
+}
+
+impl PipelineOptions {
+    pub fn validate(&self) -> Result<()> {
+        if self.dit_quant.is_some() && self.dtype != DType::F32 {
+            return Err(IrodoriError::InvalidConfig("dit_quant requires dtype f32 (the quantized matmul works on f32 activations)".into()));
+        }
+        Ok(())
+    }
 }
 
 impl Default for PipelineOptions {
     fn default() -> Self {
-        Self { dtype: DType::F32, codec_dtype: DType::F32, memory: MemoryMode::Resident }
+        Self { dtype: DType::F32, codec_dtype: DType::F32, memory: MemoryMode::Resident, dit_quant: None }
     }
 }
 
@@ -249,6 +261,7 @@ impl Pipeline {
 
     /// `model_safetensors` と同じフォルダの `tokenizer/tokenizer.json`、codec の `weights.pth` を読む。
     pub fn load_with(model_safetensors: &Path, codec_pth: &Path, device: &Device, opts: PipelineOptions) -> Result<Self> {
+        opts.validate()?;
         let weights = Weights::open(model_safetensors, device)?;
         let (cfg, te) = weights.config()?;
         let tok_path = model_safetensors.parent().unwrap_or(Path::new(".")).join("tokenizer").join("tokenizer.json");
@@ -267,7 +280,8 @@ impl Pipeline {
     }
 
     fn load_dit(&self) -> Result<Dit> {
-        Dit::load(self.weights.var_builder(self.opts.dtype)?, &self.cfg)
+        let cfg = ModelConfig { dit_quant: self.opts.dit_quant, ..self.cfg.clone() };
+        Dit::load(self.weights.var_builder(self.opts.dtype)?, &cfg)
     }
 
     fn load_duration(&self) -> Result<Option<DurationPredictor>> {
@@ -454,6 +468,16 @@ impl Pipeline {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn dit_quantization_requires_f32_weights() {
+        use crate::nn::qlinear::QuantKind;
+        let ok = PipelineOptions { dit_quant: Some(QuantKind::Q6K), ..PipelineOptions::default() };
+        assert!(ok.validate().is_ok());
+        let bf16 = PipelineOptions { dtype: DType::BF16, ..ok.clone() };
+        assert!(bf16.validate().is_err(), "the quantized matmul needs f32 activations");
+        assert!(PipelineOptions { dtype: DType::BF16, ..PipelineOptions::default() }.validate().is_ok());
+    }
+
     use super::*;
 
     const SR: u32 = 48000;
@@ -802,8 +826,18 @@ mod tests {
     }
 
     #[test]
+    fn real_model_quantized_dit_stays_close_to_python() {
+        for (kind, limit) in [(QuantKind::Q6K, 0.4f32), (QuantKind::Q4K, 0.6)] {
+            let opts = PipelineOptions { dit_quant: Some(kind), memory: MemoryMode::Staged, ..PipelineOptions::default() };
+            let Some((lat, audio, lat_rel)) = run_e2e(opts) else { return };
+            eprintln!("DiT {}: latent {lat:.2e}, audio {audio:.2e}, latent rel rms {lat_rel:.3e}", kind.name());
+            assert!(lat_rel < limit, "{kind:?}: latent relative rms error {lat_rel}");
+        }
+    }
+
+    #[test]
     fn real_model_bf16_stays_close_to_python() {
-        let opts = PipelineOptions { dtype: DType::BF16, codec_dtype: DType::F32, memory: MemoryMode::Staged };
+        let opts = PipelineOptions { dtype: DType::BF16, codec_dtype: DType::F32, memory: MemoryMode::Staged, dit_quant: None };
         let Some((lat, audio, lat_rel)) = run_e2e(opts) else { return };
         eprintln!("bf16 weights: latent {lat:.2e}, audio {audio:.2e}");
         // bf16 の丸め誤差は軌道に沿って積み上がり、構成（CFG 分岐の有無など）で 4〜7% の幅で揺れる
