@@ -369,3 +369,39 @@ fn fetch_never_follows_a_path_outside_the_destination_folder() {
     Run::new().fetch(&hub(&server), &file, &dest).unwrap();
     assert!(dest.is_file(), "parent folders are created");
 }
+
+#[test]
+fn fetch_rejects_a_body_longer_than_planned_and_discards_it() {
+    let server = server();
+    let dir = tempfile::tempdir().unwrap();
+    let dest = dir.path().join(PATH);
+    let file = planned(&server);
+    server.oversize();
+    let run = Run::new();
+    let err = run.fetch(&hub(&server), &file, &dest).unwrap_err();
+    assert_eq!(err, DownloadError::Verification);
+    assert!(!dest.exists());
+    assert!(!partial(&dest).exists(), "the oversized partial is removed");
+    assert!(
+        run.done() <= file.size,
+        "never counts or writes past the planned size: {}",
+        run.done()
+    );
+}
+
+#[test]
+fn fetch_starts_over_when_the_range_is_not_satisfiable() {
+    let server = server();
+    let dir = tempfile::tempdir().unwrap();
+    let dest = dir.path().join(PATH);
+    let file = planned(&server);
+    server.truncate_after(Some(500_000));
+    let _ = Run::new().fetch(&hub(&server), &file, &dest);
+    assert!(partial(&dest).exists());
+    server.clear_faults();
+    server.reject_range_once();
+    let run = Run::new();
+    run.fetch(&hub(&server), &file, &dest).unwrap();
+    assert_eq!(std::fs::read(&dest).unwrap(), content());
+    assert_eq!(run.done(), file.size);
+}

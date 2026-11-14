@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use sha2::{Digest, Sha256};
 use url::Url;
 
-use super::hub::{host_allowed, map_ureq};
+use super::hub::{host_allowed, map_ureq, redact_url};
 use super::{DownloadError, Hub, PlannedFile};
 
 const CHUNK: usize = 256 * 1024;
@@ -76,7 +76,10 @@ impl Hub {
         let mut current = url.to_string();
         for _ in 0..=MAX_REDIRECTS {
             if !host_allowed(&current, self.policy) {
-                return Err(protocol(format!("host not allowed: {current}")));
+                return Err(protocol(format!(
+                    "host not allowed: {}",
+                    redact_url(&current)
+                )));
             }
             let mut request = self.agent.get(&current);
             if range_from > 0 {
@@ -115,13 +118,8 @@ impl Hub {
             std::fs::create_dir_all(parent)?;
         }
         let partial = partial_path(dest);
-        let mut existing = std::fs::metadata(&partial).map(|m| m.len()).unwrap_or(0);
-        if existing > file.size {
-            discard(&partial);
-            existing = 0;
-        }
+        let existing = usable_partial_len(&partial, file.size);
         let mut hasher = Sha256::new();
-        let mut written = 0u64; // この呼び出しで、すでに通知した大きさを含めた書きかけの大きさ
 
         if existing == file.size && existing > 0 {
             // 書きかけがすでに全部ある。通信せずに検証する。
@@ -131,81 +129,157 @@ impl Hub {
         }
 
         let url = self.url(&format!("/{repo}/resolve/{sha}/{}", file.path));
-        let response = self.open(&url, existing)?;
-        let status = response.status();
-        let resumed = existing > 0
-            && status == 206
-            && response
-                .header("Content-Range")
-                .and_then(range_start)
-                .is_some_and(|start| start == existing);
-        if status != 200 && !resumed {
-            return Err(DownloadError::Http(status));
+        let (response, existing) = self.open_resuming(&url, existing, &partial)?;
+        let resumed = is_resume(&response, existing);
+        if response.status() != 200 && !resumed {
+            return Err(DownloadError::Http(response.status()));
         }
-        let expected_len = if resumed {
-            file.size - existing
-        } else {
-            file.size
-        };
-        if let Some(len) = response
-            .header("Content-Length")
-            .and_then(|v| v.parse::<u64>().ok())
-        {
-            if len != expected_len {
-                return Err(protocol(format!(
-                    "content length {len} differs from the planned {expected_len} for {}",
-                    file.path
-                )));
-            }
-        }
-        let mut out: File;
-        if resumed {
+        let expected_len = file.size - if resumed { existing } else { 0 };
+        check_content_length(&response, expected_len, &file.path)?;
+
+        let (mut out, written) = if resumed {
             hash_existing(&partial, &mut hasher, transfer.cancel)?;
-            out = OpenOptions::new().append(true).open(&partial)?;
             (transfer.progress)(existing);
-            written = existing;
+            (OpenOptions::new().append(true).open(&partial)?, existing)
         } else {
             // 最初から（Range を無視された場合を含む）。
-            out = File::create(&partial)?;
-        }
+            (File::create(&partial)?, 0)
+        };
+        let copied = copy_body(
+            response.into_reader(),
+            &mut out,
+            &mut hasher,
+            written,
+            file.size,
+            transfer,
+        );
+        settle(copied, out, &partial, dest, file, hasher)
+    }
 
-        let mut reader = response.into_reader();
-        let mut buf = vec![0u8; CHUNK];
-        loop {
-            if transfer.cancel.load(Ordering::SeqCst) {
-                out.flush()?;
-                return Err(DownloadError::Cancelled);
+    /// 書きかけの続き（`existing` バイト目から）を頼む。416（書きかけが取得元の想定と合わない）なら、捨てて最初から。
+    fn open_resuming(
+        &self,
+        url: &str,
+        existing: u64,
+        partial: &Path,
+    ) -> Result<(ureq::Response, u64), DownloadError> {
+        match self.open(url, existing) {
+            Err(DownloadError::Http(416)) if existing > 0 => {
+                discard(partial);
+                Ok((self.open(url, 0)?, 0))
             }
-            let n = match reader.read(&mut buf) {
-                Ok(0) => break,
-                Ok(n) => n,
-                Err(e) => {
-                    // 接続が切れた。書きかけは再開のために残す。取消の最中に切れたなら取消として扱う。
-                    let _ = out.flush();
-                    tracing::warn!("download interrupted: {e}");
-                    return Err(if transfer.cancel.load(Ordering::SeqCst) {
-                        DownloadError::Cancelled
-                    } else {
-                        DownloadError::Offline
-                    });
-                }
-            };
-            if let Err(e) = out.write_all(&buf[..n]) {
-                return Err(DownloadError::from(e));
-            }
-            hasher.update(&buf[..n]);
-            written += n as u64;
-            (transfer.progress)(n as u64);
+            other => Ok((other?, existing)),
         }
-        out.flush()?;
-        out.sync_all()?;
-        drop(out);
-        if written != file.size {
-            // 最後まで来たのに大きさが違う。取得元の応答がおかしいので、書きかけは捨てる。
-            discard(&partial);
+    }
+}
+
+/// 書き込みの結果を受けて、検証・rename・後始末をする。
+fn settle(
+    copied: Result<u64, DownloadError>,
+    mut out: File,
+    partial: &Path,
+    dest: &Path,
+    file: &PlannedFile,
+    hasher: Sha256,
+) -> Result<(), DownloadError> {
+    match copied {
+        Ok(total) => {
+            out.flush()?;
+            out.sync_all()?;
+            drop(out);
+            if total != file.size {
+                // 最後まで来たのに大きさが違う。取得元の応答がおかしいので、書きかけは捨てる。
+                discard(partial);
+                return Err(DownloadError::Verification);
+            }
+            finish(partial, dest, file, hasher)
+        }
+        Err(DownloadError::Verification) => {
+            // 計画より長い本文。開いたままでは消せないので閉じてから捨てる。
+            drop(out);
+            discard(partial);
+            Err(DownloadError::Verification)
+        }
+        // 切断・取消は、再開のために書きかけを残す。
+        Err(other) => Err(other),
+    }
+}
+
+/// 使える書きかけの大きさ。通常のファイルで計画より小さいものだけ（それ以外は捨てて 0）。
+fn usable_partial_len(partial: &Path, planned: u64) -> u64 {
+    match std::fs::symlink_metadata(partial) {
+        Ok(meta) if meta.is_file() && meta.len() <= planned => meta.len(),
+        Ok(_) => {
+            discard(partial);
+            0
+        }
+        Err(_) => 0,
+    }
+}
+
+/// 続きから（206 で、`Content-Range` の開始位置が書きかけの大きさと一致）の応答か。
+fn is_resume(response: &ureq::Response, existing: u64) -> bool {
+    existing > 0
+        && response.status() == 206
+        && response
+            .header("Content-Range")
+            .and_then(range_start)
+            .is_some_and(|start| start == existing)
+}
+
+fn check_content_length(
+    response: &ureq::Response,
+    expected_len: u64,
+    path: &str,
+) -> Result<(), DownloadError> {
+    match response
+        .header("Content-Length")
+        .and_then(|v| v.parse::<u64>().ok())
+    {
+        Some(len) if len != expected_len => Err(protocol(format!(
+            "content length {len} differs from the planned {expected_len} for {path}"
+        ))),
+        _ => Ok(()),
+    }
+}
+
+/// 本文を書きかけへ写す。計画の大きさ（`limit`）を 1 バイトでも超えたら、書かずに `Verification` を返す。
+/// 戻り値は、書きかけの大きさ。切断・取消のときは、再開のために書きかけを残す。
+fn copy_body(
+    mut reader: impl Read,
+    out: &mut File,
+    hasher: &mut Sha256,
+    mut written: u64,
+    limit: u64,
+    transfer: &Transfer,
+) -> Result<u64, DownloadError> {
+    let mut buf = vec![0u8; CHUNK];
+    loop {
+        if transfer.cancel.load(Ordering::SeqCst) {
+            out.flush()?;
+            return Err(DownloadError::Cancelled);
+        }
+        let n = match reader.read(&mut buf) {
+            Ok(0) => return Ok(written),
+            Ok(n) => n,
+            Err(e) => {
+                // 接続が切れた。書きかけは再開のために残す。取消の最中に切れたなら取消として扱う。
+                let _ = out.flush();
+                tracing::warn!("download interrupted: {e}");
+                return Err(if transfer.cancel.load(Ordering::SeqCst) {
+                    DownloadError::Cancelled
+                } else {
+                    DownloadError::Offline
+                });
+            }
+        };
+        if written + n as u64 > limit {
             return Err(DownloadError::Verification);
         }
-        finish(&partial, dest, file, hasher)
+        out.write_all(&buf[..n])?;
+        hasher.update(&buf[..n]);
+        written += n as u64;
+        (transfer.progress)(n as u64);
     }
 }
 

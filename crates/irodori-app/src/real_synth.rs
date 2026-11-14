@@ -344,7 +344,11 @@ mod tests {
             (
                 MF,
                 "aaaa1111",
-                vec!["model.safetensors", "tokenizer/tokenizer.json"],
+                vec![
+                    "model.safetensors",
+                    "tokenizer/tokenizer.json",
+                    "tokenizer/tokenizer_config.json",
+                ],
             ),
             (crate::models::CODEC_ID, "cccc3333", vec!["weights.pth"]),
         ] {

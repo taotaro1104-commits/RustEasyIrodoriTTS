@@ -31,3 +31,10 @@
 - **ネットワークを切った状態**: 機内モード相当にできないため実機では確認していない。偽サーバのテスト（`plan_maps_http_errors_and_offline` ほか）で担保。
 - プロキシ環境（`HTTPS_PROXY`）、並列取得、取得済みモデルの削除・更新は対象外（計画の持ち越し）。
 - 検証用データは `F:\claude\m2b3-verify-data`（約 3.3GB）。不要なら削除してよい。
+
+## レビュー指摘の修正後の再確認
+`/code-review` とセキュリティレビューの指摘（`fix/m2b3-review-findings`）を反映した release ビルドで、実ネットワーク・実ブラウザの短い確認をした。
+- 実 HF の API で、4 リポジトリすべてに対し `model.safetensors` / `weights.pth` に `lfs`（SHA-256）が付くことを確認（SHA-256 必須化で正規のモデルが拒否されない）。
+- MF モデルの確認 → 承認 → 取得中（117MB／3.1GB）: 進捗は `<progress>` に出て `#job-status` は `aria-live="off"`、声の登録の入力は `inert`。同一オリジンの POST は Origin 検査を通る。
+- 「取得を中止」: 書きかけ（179MB）が残り、入力ロックが外れ、中止のボタンにあったフォーカスは通知欄へ移る。`.locks/irodori-app-download.lock` は取得の終了で解放される。
+- `cargo test --workspace`: 589 件成功、失敗 0。

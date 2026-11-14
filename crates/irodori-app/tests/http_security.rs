@@ -263,3 +263,67 @@ async fn meta_contains_emoji_groups_and_rendered_credits() {
     }
     assert!(!credits.contains("###"), "markdown was rendered");
 }
+
+async fn post_cancel(app: &Router, host: &str, origin: Option<&str>) -> StatusCode {
+    let mut req = Request::builder()
+        .method(Method::POST)
+        .uri("/api/models/cancel")
+        .header(header::HOST, host)
+        .header("x-easy-token", TOKEN);
+    if let Some(o) = origin {
+        req = req.header(header::ORIGIN, o);
+    }
+    app.clone()
+        .oneshot(req.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+        .status()
+}
+
+#[tokio::test]
+async fn a_post_from_a_foreign_origin_is_forbidden_even_with_the_token() {
+    let f = fixture();
+    for origin in [
+        "http://evil.example",
+        "https://127.0.0.1:7860",
+        "http://127.0.0.1:9999",
+        "http://localhost:7860",
+        "null",
+    ] {
+        let status = post_cancel(&f.app, "127.0.0.1:7860", Some(origin)).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "origin {origin}");
+    }
+}
+
+#[tokio::test]
+async fn a_post_from_the_same_origin_or_without_one_passes() {
+    let f = fixture();
+    for (host, origin) in [
+        ("127.0.0.1:7860", Some("http://127.0.0.1:7860")),
+        ("localhost:7860", Some("http://localhost:7860")),
+        ("127.0.0.1:7860", None),
+    ] {
+        let status = post_cancel(&f.app, host, origin).await;
+        assert_eq!(status, StatusCode::OK, "{host} {origin:?}");
+    }
+}
+
+#[tokio::test]
+async fn host_parsing_is_strict_and_case_insensitive() {
+    let f = fixture();
+    for host in ["LOCALHOST", "LocalHost:7860", "127.0.0.1:7860"] {
+        let r = send(&f.app, Method::GET, "/", Some(host), None).await;
+        assert_eq!(r.status, StatusCode::OK, "host {host}");
+    }
+    for host in [
+        "localhost:80@evil.example",
+        "localhost:abc",
+        "localhost:",
+        "localhost:1:2",
+        "localhost.",
+        "[::1]:7860",
+    ] {
+        let r = send(&f.app, Method::GET, "/", Some(host), None).await;
+        assert_eq!(r.status, StatusCode::FORBIDDEN, "host {host}");
+    }
+}

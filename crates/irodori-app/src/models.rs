@@ -31,6 +31,13 @@ pub struct ModelFiles {
     pub codec: PathBuf,
 }
 
+/// モデルの取得済みの条件（取得するファイルの固定の一覧と同じ）。
+pub const MODEL_REQUIRED_FILES: [&str; 3] = [
+    "model.safetensors",
+    "tokenizer/tokenizer.json",
+    "tokenizer/tokenizer_config.json",
+];
+
 pub(crate) fn repo_dir(hub: &Path, id: &str) -> PathBuf {
     hub.join(format!("models--{}", id.replace('/', "--")))
 }
@@ -69,25 +76,14 @@ pub fn locate(hub: &Path, model_id: &str) -> Option<ModelFiles> {
     if !ALLOW_LIST.contains(&model_id) {
         return None;
     }
-    let model = snapshot_with(
-        hub,
-        model_id,
-        &["model.safetensors", "tokenizer/tokenizer.json"],
-    )?
-    .join("model.safetensors");
+    let model = snapshot_with(hub, model_id, &MODEL_REQUIRED_FILES)?.join("model.safetensors");
     let codec = snapshot_with(hub, CODEC_ID, &["weights.pth"])?.join("weights.pth");
     Some(ModelFiles { model, codec })
 }
 
 /// そのモデルのファイル（モデル本体とトークナイザ）が、どれかの snapshot にそろっているか。許可外は常に `false`。
 pub fn model_present(hub: &Path, model_id: &str) -> bool {
-    ALLOW_LIST.contains(&model_id)
-        && snapshot_with(
-            hub,
-            model_id,
-            &["model.safetensors", "tokenizer/tokenizer.json"],
-        )
-        .is_some()
+    ALLOW_LIST.contains(&model_id) && snapshot_with(hub, model_id, &MODEL_REQUIRED_FILES).is_some()
 }
 
 /// 共通の codec が取得済みか。
@@ -127,7 +123,11 @@ mod tests {
         }
     }
 
-    const MODEL_FILES: [&str; 2] = ["model.safetensors", "tokenizer/tokenizer.json"];
+    const MODEL_FILES: [&str; 3] = [
+        "model.safetensors",
+        "tokenizer/tokenizer.json",
+        "tokenizer/tokenizer_config.json",
+    ];
 
     fn complete_hub() -> tempfile::TempDir {
         let hub = tempfile::tempdir().unwrap();
@@ -231,6 +231,20 @@ mod tests {
             !model_present(hub.path(), "someone/else"),
             "outside the allow list"
         );
+    }
+
+    #[test]
+    fn a_model_missing_tokenizer_config_is_not_present() {
+        let hub = tempfile::tempdir().unwrap();
+        snapshot(
+            hub.path(),
+            SMALL,
+            "aaaa1111",
+            &["model.safetensors", "tokenizer/tokenizer.json"],
+        );
+        snapshot(hub.path(), CODEC_ID, "cccc3333", &["weights.pth"]);
+        assert!(!model_present(hub.path(), SMALL));
+        assert!(locate(hub.path(), SMALL).is_none());
     }
 
     #[test]
