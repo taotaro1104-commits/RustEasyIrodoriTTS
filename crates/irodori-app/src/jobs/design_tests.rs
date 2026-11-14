@@ -9,8 +9,8 @@ use irodori_store::splitter::split_text;
 use irodori_store::Store;
 use serde_json::{json, Map, Value};
 
-use super::{JobManager, REGISTRATION_SAMPLE_TEXT};
-use crate::fake::FakeSynth;
+use super::{DesignSubmit, JobManager, REGISTRATION_SAMPLE_TEXT};
+use crate::fake::{FakeInstaller, FakeSynth};
 use crate::synth::{SynthError, Synthesizer};
 
 const MF: &str = "Aratako/Irodori-TTS-v4.1-Small-MF";
@@ -36,6 +36,7 @@ fn env(build: impl FnOnce(FakeSynth) -> FakeSynth) -> Env {
         Arc::clone(&store),
         synth.clone() as Arc<dyn Synthesizer>,
         Arc::clone(&assets),
+        Arc::new(FakeInstaller::new(|_| {})) as Arc<dyn crate::download::ModelInstaller>,
     );
     Env {
         dir,
@@ -98,7 +99,7 @@ fn design_job_runs_and_registers_candidate_assets() {
     let env = env(|s| s);
     let mut v = basic();
     v.insert("candidates".into(), json!(3));
-    let id = env.jobs.submit_design(&v, false).unwrap();
+    let id = env.jobs.submit_design(&v, false).unwrap().id();
     let job = wait_done(&env, &id);
     assert_eq!(job["status"], "完了", "{job}");
     assert_eq!(
@@ -122,7 +123,7 @@ fn registration_uses_the_fixed_sample_text() {
     let env = env(|s| s);
     let mut v = basic();
     v.remove("text");
-    let id = env.jobs.submit_design(&v, true).unwrap();
+    let id = env.jobs.submit_design(&v, true).unwrap().id();
     assert_eq!(wait_done(&env, &id)["status"], "完了");
     assert_eq!(
         env.synth.calls(),
@@ -145,7 +146,7 @@ fn modes_decide_what_the_engine_receives() {
         let mut v = basic();
         v.insert("mode".into(), json!(mode));
         v.insert("references".into(), json!([key]));
-        let id = env.jobs.submit_design(&v, false).unwrap();
+        let id = env.jobs.submit_design(&v, false).unwrap().id();
         assert_eq!(wait_done(&env, &id)["status"], "完了", "{mode}");
         let seen = env.synth.last_job().unwrap();
         assert_eq!(
@@ -278,10 +279,10 @@ fn candidates_must_be_one_to_eight() {
     }
     let mut v = basic();
     v.insert("candidates".into(), json!("2"));
-    let id = env.jobs.submit_design(&v, false).unwrap();
+    let id = env.jobs.submit_design(&v, false).unwrap().id();
     assert_eq!(wait_done(&env, &id)["assets"].as_array().unwrap().len(), 2);
     v.insert("candidates".into(), json!(2.7));
-    let id = env.jobs.submit_design(&v, false).unwrap();
+    let id = env.jobs.submit_design(&v, false).unwrap().id();
     assert_eq!(
         wait_done(&env, &id)["assets"].as_array().unwrap().len(),
         2,
@@ -292,9 +293,10 @@ fn candidates_must_be_one_to_eight() {
 #[test]
 fn unknown_or_missing_models_are_rejected() {
     let env = env(|s| s.missing_models(&[MF]));
+    // 未取得のモデルは誤りではなく、取得の確認を求める（ジョブは作らない）。
     assert_eq!(
-        message(env.jobs.submit_design(&basic(), false).unwrap_err()),
-        "モデルがまだ取得されていません。"
+        env.jobs.submit_design(&basic(), false).unwrap(),
+        DesignSubmit::NeedsModelDownload(MF.into())
     );
     let mut v = basic();
     v.insert("model".into(), json!("evil/model"));
@@ -312,7 +314,7 @@ fn slow() -> impl FnOnce(FakeSynth) -> FakeSynth {
 #[test]
 fn a_busy_manager_rejects_a_second_design_and_a_generation() {
     let env = env(slow());
-    let first = env.jobs.submit_design(&basic(), false).unwrap();
+    let first = env.jobs.submit_design(&basic(), false).unwrap().id();
     assert_eq!(
         message(env.jobs.submit_design(&basic(), false).unwrap_err()),
         "現在の生成が終わってから実行してください。"
@@ -337,7 +339,7 @@ fn a_busy_manager_rejects_a_second_design_and_a_generation() {
 #[test]
 fn stop_marks_a_design_job_stopped_with_no_assets() {
     let env = env(slow());
-    let id = env.jobs.submit_design(&basic(), false).unwrap();
+    let id = env.jobs.submit_design(&basic(), false).unwrap().id();
     std::thread::sleep(Duration::from_millis(60));
     env.jobs.stop();
     let job = wait_done(&env, &id);
@@ -357,14 +359,14 @@ fn engine_failure_marks_the_job_failed_with_a_message() {
     });
     let mut v = basic();
     v.insert("text".into(), json!("失敗する文。"));
-    let id = env.jobs.submit_design(&v, false).unwrap();
+    let id = env.jobs.submit_design(&v, false).unwrap().id();
     let job = wait_done(&env, &id);
     assert_eq!(
         (job["status"].as_str(), job["error"].as_str()),
         (Some("失敗"), Some("モデルの上限を超えています。"))
     );
     v.insert("text".into(), json!("想定外。"));
-    let id = env.jobs.submit_design(&v, false).unwrap();
+    let id = env.jobs.submit_design(&v, false).unwrap().id();
     let job = wait_done(&env, &id);
     assert_eq!(
         (job["status"].as_str(), job["error"].as_str()),
@@ -378,13 +380,13 @@ fn engine_panic_does_not_kill_the_worker() {
     let env = env(|s| s.panic_on("パニック。"));
     let mut v = basic();
     v.insert("text".into(), json!("パニック。"));
-    let id = env.jobs.submit_design(&v, false).unwrap();
+    let id = env.jobs.submit_design(&v, false).unwrap().id();
     let job = wait_done(&env, &id);
     assert_eq!(
         (job["status"].as_str(), job["error"].as_str()),
         (Some("失敗"), Some(GENERIC))
     );
-    let id = env.jobs.submit_design(&basic(), false).unwrap();
+    let id = env.jobs.submit_design(&basic(), false).unwrap().id();
     assert_eq!(
         wait_done(&env, &id)["status"],
         "完了",
@@ -397,7 +399,7 @@ fn a_design_job_does_not_touch_cards_or_hold_card_ids() {
     let env = env(slow());
     let doc = env.store.load(None).unwrap();
     let before = serde_json::to_value(&doc).unwrap();
-    let id = env.jobs.submit_design(&basic(), false).unwrap();
+    let id = env.jobs.submit_design(&basic(), false).unwrap().id();
     assert!(env.jobs.active_card_ids(&doc.id).is_empty());
     env.jobs.stop();
     wait_done(&env, &id);
@@ -410,13 +412,13 @@ fn a_design_job_does_not_touch_cards_or_hold_card_ids() {
 #[test]
 fn design_result_is_none_until_done_and_carries_the_record() {
     let env = env(slow());
-    let id = env.jobs.submit_design(&basic(), false).unwrap();
+    let id = env.jobs.submit_design(&basic(), false).unwrap().id();
     assert!(env.jobs.design_result(&id).is_none(), "not finished yet");
     assert!(env.jobs.design_result("nope").is_none());
     env.jobs.stop();
     wait_done(&env, &id);
     let env2 = self::env(|s| s);
-    let id = env2.jobs.submit_design(&basic(), false).unwrap();
+    let id = env2.jobs.submit_design(&basic(), false).unwrap().id();
     wait_done(&env2, &id);
     let (assets, record) = env2.jobs.design_result(&id).unwrap();
     assert_eq!(assets.len(), 1);
@@ -456,7 +458,7 @@ fn a_generation_job_id_is_not_a_design_result() {
 #[test]
 fn jobs_json_has_the_design_shape() {
     let env = env(|s| s);
-    let id = env.jobs.submit_design(&basic(), false).unwrap();
+    let id = env.jobs.submit_design(&basic(), false).unwrap().id();
     let job = wait_done(&env, &id);
     for key in [
         "id", "project", "status", "done", "total", "error", "stopping", "kind", "step", "steps",

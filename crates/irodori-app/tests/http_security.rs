@@ -25,12 +25,14 @@ fn fixture() -> Fixture {
     }
     let store = Arc::new(Store::open(dir.path()).unwrap());
     let synth = Arc::new(irodori_app::fake::FakeSynth::new(dir.path()));
+    let installer = Arc::new(irodori_app::fake::FakeInstaller::for_synth(synth.clone()));
     let state = AppState::new(
         store,
         PathBuf::from(dir.path()),
         TOKEN.to_string(),
         "cpu".to_string(),
         synth,
+        installer,
     );
     Fixture {
         app: build_router(state),

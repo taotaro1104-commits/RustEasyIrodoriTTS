@@ -1,6 +1,7 @@
 //! ローカルだけで動く Easy-Irodori-TTS のサーバ。画面（editor）を配り、v2.0 と同じ API を提供する。
 
 pub mod assets_embed;
+pub mod download;
 pub mod errors;
 pub mod fake;
 pub mod jobs;
@@ -8,6 +9,7 @@ pub mod launch;
 pub mod logging;
 pub mod meta;
 pub mod models;
+pub mod models_api;
 pub mod real_synth;
 pub mod routes;
 pub mod security;
@@ -27,6 +29,7 @@ use axum::routing::get;
 use axum::Router;
 use irodori_store::{assets::Assets, Store};
 
+use crate::download::ModelInstaller;
 use crate::jobs::JobManager;
 use crate::synth::Synthesizer;
 
@@ -42,6 +45,8 @@ pub struct AppState {
     pub jobs: Arc<JobManager>,
     /// 合成エンジン（本物か、テスト用の擬似）。
     pub synth: Arc<dyn Synthesizer>,
+    /// モデルの取得（本物か、テスト用の擬似）。確認のあとにだけ使う。
+    pub installer: Arc<dyn ModelInstaller>,
 }
 
 impl AppState {
@@ -52,12 +57,14 @@ impl AppState {
         token: String,
         backend: String,
         synth: Arc<dyn Synthesizer>,
+        installer: Arc<dyn ModelInstaller>,
     ) -> AppState {
         let assets = Arc::new(Assets::new());
         let jobs = Arc::new(JobManager::new(
             Arc::clone(&store),
             Arc::clone(&synth),
             Arc::clone(&assets),
+            Arc::clone(&installer),
         ));
         AppState {
             store,
@@ -67,6 +74,7 @@ impl AppState {
             backend,
             jobs,
             synth,
+            installer,
         }
     }
 }

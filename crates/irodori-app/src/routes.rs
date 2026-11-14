@@ -79,10 +79,15 @@ fn full_state(app: &AppState, pid: Option<&str>) -> ApiResult<Value> {
     )?;
     if let Some(models) = state.get_mut("models").and_then(Value::as_array_mut) {
         for model in models {
-            let available = model["id"]
-                .as_str()
-                .is_some_and(|id| app.synth.model_available(id));
+            let id = model["id"].as_str().unwrap_or_default().to_string();
+            let available = app.synth.model_available(&id);
             model["installed"] = json!(available);
+            // 取得が要るモデルだけ、取得するバイト数の概算（画面の確認用）。取得済みは 0。
+            model["download_bytes"] = json!(if available {
+                0
+            } else {
+                app.installer.approximate_bytes(&id)
+            });
         }
     }
     Ok(state)
@@ -279,6 +284,9 @@ async fn generate(State(app): State<AppState>, body: Bytes) -> ApiResult<Json<Va
         SubmitOutcome::NeedsLongConfirmation { long_cards } => Ok(Json(
             json!({"needs_long_confirmation": true, "long_cards": long_cards}),
         )),
+        SubmitOutcome::NeedsModelDownload { model } => {
+            Ok(Json(crate::models_api::needs_download(&app, &model)))
+        }
     }
 }
 
@@ -312,6 +320,8 @@ pub fn routes() -> Router<AppState> {
         .route("/api/generate", post(generate))
         .route("/api/stop", post(stop))
         .route("/api/unload", post(unload))
+        .route("/api/models/download", post(crate::models_api::download))
+        .route("/api/models/cancel", post(crate::models_api::cancel))
         .route("/api/voice", post(crate::voices::voice))
         .route("/api/voice/rename", post(crate::voices::rename))
         .route("/api/voice/delete", post(crate::voices::delete))

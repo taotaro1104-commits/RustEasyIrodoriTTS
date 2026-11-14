@@ -11,6 +11,7 @@ use clap::Parser;
 use irodori_store::model::{new_project, uid};
 use irodori_store::Store;
 
+use crate::download::RealInstaller;
 use crate::real_synth::RealSynth;
 use crate::{build_router, logging, AppState};
 
@@ -188,6 +189,7 @@ async fn serve(args: &Args) -> Result<()> {
         format!("{}{}", uid(), uid()),
         settings.backend.clone(),
         synth,
+        Arc::new(RealInstaller::new(args.hub_dir())),
     );
     println!("Easy-Irodori-TTS: {url}");
     tracing::info!(

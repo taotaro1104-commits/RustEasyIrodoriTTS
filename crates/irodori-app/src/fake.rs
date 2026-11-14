@@ -5,12 +5,14 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
 use irodori_store::model::uid;
 use serde_json::Value;
 
+use crate::download::{DownloadControl, DownloadError, ModelInstaller};
 use crate::synth::{SynthError, SynthJob, SynthRecord, Synthesizer};
 
 const SAMPLE_RATE: u32 = 24_000;
@@ -24,7 +26,7 @@ pub struct FakeSynth {
     step_delay: Duration,
     failures: HashMap<String, SynthError>,
     panics: HashSet<String>,
-    missing: HashSet<String>,
+    missing: Mutex<HashSet<String>>,
     calls: Mutex<Vec<String>>,
     last_job: Mutex<Option<SynthJob>>,
     loaded: AtomicBool,
@@ -40,7 +42,7 @@ impl FakeSynth {
             step_delay: Duration::ZERO,
             failures: HashMap::new(),
             panics: HashSet::new(),
-            missing: HashSet::new(),
+            missing: Mutex::new(HashSet::new()),
             calls: Mutex::new(Vec::new()),
             last_job: Mutex::new(None),
             loaded: AtomicBool::new(false),
@@ -74,15 +76,35 @@ impl FakeSynth {
         self
     }
 
-    pub fn missing_models(mut self, models: &[&str]) -> FakeSynth {
-        self.missing.extend(models.iter().map(|m| m.to_string()));
+    pub fn missing_models(self, models: &[&str]) -> FakeSynth {
+        self.missing
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .extend(models.iter().map(|m| m.to_string()));
         self
+    }
+
+    /// モデルが使える（取得済み）かどうかを後から切り替える。取得の擬似（`FakeInstaller`）が、完了時に呼ぶ。
+    pub fn set_installed(&self, model: &str, installed: bool) {
+        let mut missing = self.missing.lock().unwrap_or_else(|e| e.into_inner());
+        if installed {
+            missing.remove(model);
+        } else {
+            missing.insert(model.to_string());
+        }
     }
 
     /// 合成に成功して結果を返す直前に、データのルートを渡して呼ぶ（保存先を壊すなど、失敗の再現に使う）。
     pub fn on_success(mut self, hook: impl Fn(&Path) + Send + Sync + 'static) -> FakeSynth {
         self.on_success = Some(Box::new(hook));
         self
+    }
+
+    fn is_missing(&self, model: &str) -> bool {
+        self.missing
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains(model)
     }
 
     /// 最後に合成を頼まれた依頼（モード別に何を渡したかの確認に使う）。
@@ -118,7 +140,7 @@ impl Synthesizer for FakeSynth {
         if let Some(error) = self.failures.get(&job.text) {
             return Err(error.clone());
         }
-        if self.missing.contains(&job.model) {
+        if self.is_missing(&job.model) {
             return Err(SynthError::Invalid(
                 "モデルがまだ取得されていません。".into(),
             ));
@@ -183,7 +205,110 @@ impl Synthesizer for FakeSynth {
     }
 
     fn model_available(&self, model: &str) -> bool {
-        !self.missing.contains(model)
+        !self.is_missing(model)
+    }
+}
+
+/// 擬似の導入。ネットワークに出ずに、決まった数のステップでバイト数を進め、完了時に `on_install` を呼ぶ。
+pub struct FakeInstaller {
+    on_install: Box<dyn Fn(&str) + Send + Sync>,
+    steps: Mutex<usize>,
+    delay: Mutex<Duration>,
+    failure: Mutex<Option<DownloadError>>,
+    panic_next: AtomicBool,
+    installs: Mutex<Vec<String>>,
+    approx: Mutex<u64>,
+}
+
+/// 擬似の 1 ステップで進めるバイト数。
+const FAKE_STEP_BYTES: u64 = 1_000;
+
+impl FakeInstaller {
+    pub fn new(on_install: impl Fn(&str) + Send + Sync + 'static) -> FakeInstaller {
+        FakeInstaller {
+            on_install: Box::new(on_install),
+            steps: Mutex::new(4),
+            delay: Mutex::new(Duration::ZERO),
+            failure: Mutex::new(None),
+            panic_next: AtomicBool::new(false),
+            installs: Mutex::new(Vec::new()),
+            approx: Mutex::new(3_300_000_000),
+        }
+    }
+
+    /// `synth` の未取得を、導入が終わったときに外す擬似の導入。
+    pub fn for_synth(synth: Arc<FakeSynth>) -> FakeInstaller {
+        FakeInstaller::new(move |model| synth.set_installed(model, true))
+    }
+
+    pub fn set_steps(&self, steps: usize) {
+        *self.steps.lock().unwrap_or_else(|e| e.into_inner()) = steps;
+    }
+
+    pub fn set_delay(&self, delay: Duration) {
+        *self.delay.lock().unwrap_or_else(|e| e.into_inner()) = delay;
+    }
+
+    /// 次の導入からの失敗（`None` で解除）。
+    pub fn fail_with(&self, error: Option<DownloadError>) {
+        *self.failure.lock().unwrap_or_else(|e| e.into_inner()) = error;
+    }
+
+    /// 次の 1 回の導入で panic する。
+    pub fn panic_next(&self) {
+        self.panic_next.store(true, Ordering::SeqCst);
+    }
+
+    pub fn set_approximate_bytes(&self, bytes: u64) {
+        *self.approx.lock().unwrap_or_else(|e| e.into_inner()) = bytes;
+    }
+
+    /// これまでに導入を頼まれたモデル（呼ばれた順）。通信が起きていないことの確認に使う。
+    pub fn installs(&self) -> Vec<String> {
+        self.installs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+}
+
+impl ModelInstaller for FakeInstaller {
+    fn install(&self, model: &str, control: &DownloadControl) -> Result<(), DownloadError> {
+        self.installs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(model.to_string());
+        if self.panic_next.swap(false, Ordering::SeqCst) {
+            panic!("fake installer panic");
+        }
+        let steps = *self.steps.lock().unwrap_or_else(|e| e.into_inner());
+        let delay = *self.delay.lock().unwrap_or_else(|e| e.into_inner());
+        control
+            .total
+            .store(steps as u64 * FAKE_STEP_BYTES, Ordering::SeqCst);
+        for _ in 0..steps {
+            if control.cancel.load(Ordering::SeqCst) {
+                return Err(DownloadError::Cancelled);
+            }
+            if !delay.is_zero() {
+                std::thread::sleep(delay);
+            }
+            control.done.fetch_add(FAKE_STEP_BYTES, Ordering::SeqCst);
+        }
+        if let Some(error) = self
+            .failure
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+        {
+            return Err(error);
+        }
+        (self.on_install)(model);
+        Ok(())
+    }
+
+    fn approximate_bytes(&self, _model: &str) -> u64 {
+        *self.approx.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 

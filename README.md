@@ -12,7 +12,7 @@
 | `irodori-core` | 推論コア（Candle の CPU 実装。正規化・トークナイザ・ModernBERT・DiT・DACVAE・サンプラ・音声処理） | M1 完了。Python 版と数値一致（`docs/bench.md`） |
 | `irodori-cli` | テキスト→WAV のコマンド | M1 完了 |
 | `irodori-store` | v2.0 互換の保存層（台本・話者・設定・辞書・分割・署名・編集操作・状態） | M2a 完了。M2b-2: 話者の登録・名前変更・削除 |
-| `irodori-app` | ローカルサーバ＋画面（v2.0 の editor を埋め込み） | M2a: 編集・辞書・設定・クレジット。M2b-1: 音声の生成・停止・進捗。M2b-2: 音声の取り込み（wav / mp3 / flac / Vorbis の ogg / m4a / mp4。`.webm` と Opus の ogg は未対応）・話者の登録／名前変更／削除・声の試作（ボイスデザイン）。モデルの自動取得は M2b-3、書き出しは M2c |
+| `irodori-app` | ローカルサーバ＋画面（v2.0 の editor を埋め込み） | M2a: 編集・辞書・設定・クレジット。M2b-1: 音声の生成・停止・進捗。M2b-2: 音声の取り込み（wav / mp3 / flac / Vorbis の ogg / m4a / mp4。`.webm` と Opus の ogg は未対応）・話者の登録／名前変更／削除・声の試作（ボイスデザイン）。M2b-3: モデルの自動取得（確認のうえ取得・進捗・中止・再開。確認なしには通信しない）。**M2b 完了**。書き出しは M2c |
 
 ## 起動
 ```powershell
@@ -20,8 +20,8 @@ cargo run --release -p irodori-app
 # 例: データフォルダとポートを指定し、ブラウザを自動で開かない
 cargo run --release -p irodori-app -- --data-dir D:\easy-irodori --port 7860 --no-browser
 ```
-- モデルは `--models-dir`（既定は `<データフォルダ>/models/huggingface/hub`。HF キャッシュ互換で、v2.0 の `models/huggingface/hub` をそのまま使える）から探します。取得はまだ手動です（自動ダウンロードは M2b-3）。
-- 生成できるのは、モデルが置いてあるときだけです。話速（1.0 倍以外）は M2c までは使えません。
+- モデルは `--models-dir`（既定は `<データフォルダ>/models/huggingface/hub`。HF キャッシュ互換で、v2.0 の `models/huggingface/hub` をそのまま使える）から探します。未取得のモデルが要るときは、画面が**確認のうえ**で Hugging Face から自動で取得します（初回は約 3.3GB。取得中は進捗が出て、中止でき、途中からの再開もできます）。確認の前には、通信しません。
+- 取得するのは許可リストのモデル（標準・Anime・MF）と共通の codec だけです。通信先は `huggingface.co` / `hf.co`（HTTPS）に限り、SHA-256 とサイズを確かめてから使います。空き容量が足りないときは始めません。話速（1.0 倍以外）は M2c までは使えません。
 - 既定のデータフォルダは実行ファイルと同じ場所。v2.0 と同じ形式（`projects/` `voices/` `config/` `outputs/`）で読み書きします。
 - ポートは既定 7860。使用中なら次の空きを使います。起動時に表示される URL を開いてください（自動で開く設定も可）。
 - 同じデータフォルダでの二重起動はできません。v2.0（Python 版）とも排他で、どちらかが動いている間は、もう一方は同じフォルダを使えません（同時に書いて編集が消えるのを防ぐため）。ログは `logs/editor.log`。
@@ -32,6 +32,6 @@ cargo run --release -p irodori-app -- --data-dir D:\easy-irodori --port 7860 --n
 cargo test -p irodori-store -p irodori-app                  # 普段のテスト
 cargo test -p irodori-core --release                        # 推論コア（実モデルのテストは環境変数が要る）
 ```
-- 画面の通し確認の結果: `docs/m2a-verification.md`（編集・辞書・設定）、`docs/m2b1-verification.md`（実モデルでの生成・停止）、`docs/m2b2-verification.md`（取り込み・話者の登録・試作）
+- 画面の通し確認の結果: `docs/m2a-verification.md`（編集・辞書・設定）、`docs/m2b1-verification.md`（実モデルでの生成・停止）、`docs/m2b2-verification.md`（取り込み・話者の登録・試作）、`docs/m2b3-verification.md`（実ネットでのモデル取得・中止・再開）
 - v2.0（Python）との互換確認: `tools/compat/README.md`（Python 環境が要るため手動）。Rust 版が書いたデータを v2.0 で読み直す確認は `tools/compat/check_voices.py`
 - 設計・計画: `docs/superpowers/specs/` と `docs/superpowers/plans/`

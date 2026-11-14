@@ -6,7 +6,7 @@ use std::sync::Arc;
 use axum::body::{to_bytes, Body};
 use axum::http::{header, HeaderMap, Method, Request, StatusCode};
 use axum::Router;
-use irodori_app::fake::FakeSynth;
+use irodori_app::fake::{FakeInstaller, FakeSynth};
 use irodori_app::jobs::JobManager;
 use irodori_app::{build_router, AppState};
 use irodori_store::{assets::Assets, Store};
@@ -26,6 +26,7 @@ pub struct Fixture {
     pub store: Arc<Store>,
     pub jobs: Arc<JobManager>,
     pub synth: Arc<FakeSynth>,
+    pub installer: Arc<FakeInstaller>,
 }
 
 pub fn fixture() -> Fixture {
@@ -51,12 +52,14 @@ fn build(with_voice: bool, tweak: impl FnOnce(FakeSynth) -> FakeSynth) -> Fixtur
     }
     let store = Arc::new(Store::open(dir.path()).unwrap());
     let synth = Arc::new(tweak(FakeSynth::new(dir.path())));
+    let installer = Arc::new(FakeInstaller::for_synth(synth.clone()));
     let state = AppState::new(
         store.clone(),
         PathBuf::from(dir.path()),
         TOKEN.to_string(),
         "cpu".to_string(),
         synth.clone(),
+        installer.clone(),
     );
     Fixture {
         assets: state.assets.clone(),
@@ -66,6 +69,7 @@ fn build(with_voice: bool, tweak: impl FnOnce(FakeSynth) -> FakeSynth) -> Fixtur
         dir,
         store,
         synth,
+        installer,
     }
 }
 

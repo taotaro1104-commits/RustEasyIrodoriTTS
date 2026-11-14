@@ -230,7 +230,7 @@ async fn stop_with_nothing_running_is_a_quiet_ok() {
 }
 
 #[tokio::test]
-async fn generate_with_a_missing_model_is_400_with_the_japanese_message() {
+async fn generate_with_a_missing_model_asks_before_downloading() {
     let f = fixture_with_voice(|s| s.missing_models(&[MF]));
     let (pid, rev, _) = prepare(&f, "こんにちは。").await;
     let r = post(
@@ -239,9 +239,17 @@ async fn generate_with_a_missing_model_is_400_with_the_japanese_message() {
         json!({"pid": pid, "revision": rev}),
     )
     .await;
-    assert_eq!(
-        (r.status, r.error().as_str()),
-        (StatusCode::BAD_REQUEST, "モデルがまだ取得されていません。")
+    assert_eq!(r.status, StatusCode::OK, "{}", r.error());
+    let body = r.json();
+    assert_eq!(body["needs_model_download"], true, "{body}");
+    assert_eq!(body["model"], MF);
+    assert!(
+        f.installer.installs().is_empty(),
+        "asking does not download anything"
+    );
+    assert!(
+        state(&f).await["jobs"].as_array().unwrap().is_empty(),
+        "no job is created"
     );
     let s = state(&f).await;
     let installed: Vec<(String, bool)> = s["models"]

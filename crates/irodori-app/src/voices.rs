@@ -8,6 +8,7 @@ use irodori_store::StoreError;
 use serde_json::{json, Map, Value};
 
 use crate::errors::ApiError;
+use crate::jobs::DesignSubmit;
 use crate::models::ALLOW_LIST;
 use crate::routes::{parse, text, ApiResult};
 use crate::AppState;
@@ -65,10 +66,18 @@ pub async fn voice(State(app): State<AppState>, body: Bytes) -> ApiResult<Json<V
     ))
 }
 
-/// 声の試作を始める。応答はジョブの ID だけ（v2.0 と同じ）。
+/// 始めたらジョブの ID だけ（v2.0 と同じ）。モデルが未取得なら、取得の確認を求める応答。
+fn design_response(app: &AppState, submitted: DesignSubmit) -> ApiResult<Json<Value>> {
+    Ok(Json(match submitted {
+        DesignSubmit::Started(id) => json!({ "job": id }),
+        DesignSubmit::NeedsModelDownload(model) => crate::models_api::needs_download(app, &model),
+    }))
+}
+
+/// 声の試作を始める。
 pub async fn design(State(app): State<AppState>, body: Bytes) -> ApiResult<Json<Value>> {
     let data = parse(&body)?;
-    Ok(Json(json!({"job": app.jobs.submit_design(&data, false)?})))
+    design_response(&app, app.jobs.submit_design(&data, false)?)
 }
 
 /// 登録用の定型文で声の試作を始める。
@@ -77,7 +86,7 @@ pub async fn design_registration(
     body: Bytes,
 ) -> ApiResult<Json<Value>> {
     let data = parse(&body)?;
-    Ok(Json(json!({"job": app.jobs.submit_design(&data, true)?})))
+    design_response(&app, app.jobs.submit_design(&data, true)?)
 }
 
 pub async fn rename(State(app): State<AppState>, body: Bytes) -> ApiResult<Json<Value>> {

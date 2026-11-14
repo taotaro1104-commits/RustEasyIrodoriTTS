@@ -12,23 +12,24 @@ use irodori_store::{ops, Store, StoreError};
 use serde_json::{json, Value};
 
 use super::{JobManager, SubmitOutcome};
-use crate::fake::FakeSynth;
+use crate::fake::{FakeInstaller, FakeSynth};
 use crate::synth::{SynthError, Synthesizer};
 
-const MF: &str = "Aratako/Irodori-TTS-v4.1-Small-MF";
-const VOICE: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-const GENERIC: &str = "処理に失敗しました。logs/editor.logを確認してください。";
+pub(super) const MF: &str = "Aratako/Irodori-TTS-v4.1-Small-MF";
+pub(super) const VOICE: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+pub(super) const GENERIC: &str = "処理に失敗しました。logs/editor.logを確認してください。";
 
-struct Env {
-    dir: tempfile::TempDir,
-    store: Arc<Store>,
-    synth: Arc<FakeSynth>,
-    jobs: JobManager,
-    pid: String,
+pub(super) struct Env {
+    pub(super) dir: tempfile::TempDir,
+    pub(super) store: Arc<Store>,
+    pub(super) synth: Arc<FakeSynth>,
+    pub(super) installer: Arc<FakeInstaller>,
+    pub(super) jobs: JobManager,
+    pub(super) pid: String,
 }
 
 /// 話者を 1 人持つデータフォルダに、`texts` のカードを並べた台本を作る。
-fn env(texts: &[&str], build: impl FnOnce(FakeSynth) -> FakeSynth) -> Env {
+pub(super) fn env(texts: &[&str], build: impl FnOnce(FakeSynth) -> FakeSynth) -> Env {
     let dir = tempfile::tempdir().unwrap();
     for sub in ["projects", "voices", "config", "temp", "outputs"] {
         std::fs::create_dir_all(dir.path().join(sub)).unwrap();
@@ -55,25 +56,28 @@ fn env(texts: &[&str], build: impl FnOnce(FakeSynth) -> FakeSynth) -> Env {
         })
         .unwrap();
     let synth = Arc::new(build(FakeSynth::new(dir.path())));
+    let installer = Arc::new(FakeInstaller::for_synth(Arc::clone(&synth)));
     let jobs = JobManager::new(
         Arc::clone(&store),
         synth.clone() as Arc<dyn Synthesizer>,
         Arc::new(irodori_store::assets::Assets::new()),
+        installer.clone() as Arc<dyn crate::download::ModelInstaller>,
     );
     Env {
         dir,
         store,
         synth,
+        installer,
         jobs,
         pid,
     }
 }
 
 impl Env {
-    fn doc(&self) -> Project {
+    pub(super) fn doc(&self) -> Project {
         self.store.load(Some(&self.pid)).unwrap()
     }
-    fn submit(
+    pub(super) fn submit(
         &self,
         cid: Option<&str>,
         changed: bool,
@@ -82,14 +86,14 @@ impl Env {
         self.jobs
             .submit(&self.pid, self.doc().revision, cid, changed, allow_long)
     }
-    fn run_all(&self) {
+    pub(super) fn run_all(&self) {
         assert_eq!(
             self.submit(None, false, false).unwrap(),
             SubmitOutcome::Started
         );
         self.wait_idle();
     }
-    fn wait_idle(&self) {
+    pub(super) fn wait_idle(&self) {
         let deadline = Instant::now() + Duration::from_secs(20);
         while self.jobs.busy() {
             assert!(Instant::now() < deadline, "the job did not finish");
@@ -106,7 +110,7 @@ impl Env {
             std::thread::sleep(Duration::from_millis(2));
         }
     }
-    fn statuses(&self) -> Vec<String> {
+    pub(super) fn statuses(&self) -> Vec<String> {
         self.doc().cards.iter().map(|c| c.status.clone()).collect()
     }
 }
@@ -226,12 +230,14 @@ fn missing_voice_and_missing_model_are_reported_with_the_card_number() {
     );
     assert_eq!(e.statuses(), ["未生成", "未生成"], "nothing was queued");
 
+    // 未取得のモデルは誤りではなく、取得の確認を求める（ジョブは作らず、カードも変えない）。
     let e = env(&["一つ目です。"], |s| s.missing_models(&[MF]));
     assert_eq!(
-        e.submit(None, false, false).unwrap_err().message(),
-        "モデルがまだ取得されていません。"
+        e.submit(None, false, false).unwrap(),
+        SubmitOutcome::NeedsModelDownload { model: MF.into() }
     );
     assert_eq!(e.statuses(), ["未生成"]);
+    assert!(e.jobs.jobs_json().is_empty());
 }
 
 #[test]
