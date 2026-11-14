@@ -518,3 +518,29 @@ async fn favicon_request_is_answered_quietly() {
     );
     assert!(r.body.is_empty());
 }
+
+/// 画面は、未取得のモデルが要るとき確認のうえで取得し、進捗を出し、中止でき、確認なしには取得を始めない。
+#[tokio::test]
+async fn editor_script_handles_needs_model_download() {
+    let f = fixture();
+    let js = String::from_utf8(get(&f.app, "/editor/app.js").await.body).unwrap();
+    for needle in [
+        "needs_model_download",
+        "models/download",
+        "models/cancel",
+        "confirm:true",
+        "askDownload",
+        "checkDownload",
+        "download_bytes",
+    ] {
+        assert!(js.contains(needle), "app.js lacks {needle}");
+    }
+    // 確認（confirm）を経てから取得を頼む順序: askDownload の中で、confirm( が models/download より前に来る。
+    let ask = js.find("async function askDownload").expect("askDownload is defined");
+    let body = &js[ask..];
+    assert!(body.find("confirm(").unwrap() < body.find("models/download").unwrap());
+    // 生成・試作の両方が、確認の要求を処理する。
+    assert!(js.matches("needs_model_download").count() >= 2);
+    let html = String::from_utf8(get(&f.app, "/").await.body).unwrap();
+    assert!(html.contains("id=\"download-cancel\""), "the cancel button exists");
+}
