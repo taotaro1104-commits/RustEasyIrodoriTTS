@@ -536,11 +536,43 @@ async fn editor_script_handles_needs_model_download() {
         assert!(js.contains(needle), "app.js lacks {needle}");
     }
     // 確認（confirm）を経てから取得を頼む順序: askDownload の中で、confirm( が models/download より前に来る。
-    let ask = js.find("async function askDownload").expect("askDownload is defined");
+    let ask = js
+        .find("async function askDownload")
+        .expect("askDownload is defined");
     let body = &js[ask..];
     assert!(body.find("confirm(").unwrap() < body.find("models/download").unwrap());
     // 生成・試作の両方が、確認の要求を処理する。
     assert!(js.matches("needs_model_download").count() >= 2);
     let html = String::from_utf8(get(&f.app, "/").await.body).unwrap();
-    assert!(html.contains("id=\"download-cancel\""), "the cancel button exists");
+    assert!(
+        html.contains("id=\"download-cancel\""),
+        "the cancel button exists"
+    );
+}
+
+#[tokio::test]
+async fn editor_download_ui_is_robust_and_accessible() {
+    let f = fixture();
+    let js = String::from_utf8(get(&f.app, "/editor/app.js").await.body).unwrap();
+    // 進捗の % は 100 を超えない。
+    assert!(js.contains("Math.min(100"));
+    // 取得の依頼が失敗しても利用者に見える（askDownload 内で捕まえて表示する）。
+    let ask = js.find("async function askDownload").unwrap();
+    let ask_end = js[ask..]
+        .find(
+            "
+",
+        )
+        .unwrap()
+        + ask;
+    assert!(js[ask..ask_end].contains("catch(e){say(e.message,true)"));
+    // ジョブが状態から消えても、待ちが解除される。
+    assert!(js.contains("pendingDownload.missing"));
+    // 声の登録の取得中は、確認した内容と違う条件で再開しないよう、入力を止める。
+    assert!(js.contains("$('#register-flow').inert=true;say('モデルの取得を始めました"));
+    assert!(js.contains("function finishDownload"));
+    let html = String::from_utf8(get(&f.app, "/").await.body).unwrap();
+    // 進捗は読み上げ領域に流さず、progress 要素で出す。
+    assert!(html.contains("id=\"job-status\" aria-live=\"off\""));
+    assert!(html.contains("<progress id=\"download-progress\""));
 }

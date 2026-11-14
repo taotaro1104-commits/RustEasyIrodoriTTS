@@ -1,7 +1,7 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="easy-token" content="__TOKEN__"><title>Easy-Irodori-TTS v2.0</title><link rel="stylesheet" href="/editor/style.css"></head><body>
 <header><div><span class="eyebrow">LOCAL VOICE STUDIO</span><h1>Easy-Irodori-TTS <small>v2.0</small></h1><p>Aratako様が開発されたIrodori-TTSを手軽に使えるアプリです。</p></div><span id="device" class="badge"></span></header>
 <nav aria-label="メイン"><button data-tab="voices" class="active">声の登録・編集</button><button data-tab="editor">音声作成</button><button data-tab="dictionary">読み辞書</button><button data-tab="options">オプション設定</button><button data-tab="credits">クレジット・注意事項</button></nav>
-<div id="notice" role="status" aria-live="polite">読み込み中…</div><div id="job-status" aria-live="polite"></div><button id="download-cancel" hidden>取得を中止</button>
+<div id="notice" role="status" aria-live="polite" tabindex="-1">読み込み中…</div><div id="job-status" aria-live="off"></div><progress id="download-progress" max="100" value="0" hidden aria-label="モデルの取得の進捗"></progress><button id="download-cancel" hidden>取得を中止</button>
 <main>
 <section id="voices" class="tab active">
 <p class="voice-intro">目的に合う手順を開き、上から順に進めてください。</p>
