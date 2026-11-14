@@ -1,6 +1,7 @@
 //! ローカルだけで動く Easy-Irodori-TTS のサーバ。画面（editor）を配り、v2.0 と同じ API を提供する。
 
 pub mod assets_embed;
+pub mod download;
 pub mod errors;
 pub mod fake;
 pub mod jobs;

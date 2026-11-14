@@ -21,10 +21,15 @@ anyhow.workspace = true
 clap = { version = "4", features = ["derive"] }
 open = "5"
 tracing = "0.1"
+ureq = { version = "2", default-features = false, features = ["tls"] }
+url = "2"
+fs4 = "1"
+sha2.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tracing-subscriber = "0.3"
 
 [dev-dependencies]
+futures-util = "0.3"
 hound.workspace = true
 tower.workspace = true
 tempfile.workspace = true
