@@ -15,8 +15,8 @@ use crate::{Result, Store, StoreError};
 /// `easy_models.MODELS`。`installed` は取得済みかどうか（M2a では常に未取得）。
 fn models() -> Value {
     json!([
-        {"id": "Aratako/Irodori-TTS-v4.1-Small", "name": "標準", "steps": 40, "mf": false, "installed": false},
-        {"id": "phasefield-audio/Irodori-TTS-v4.1-Anime", "name": "Anime", "steps": 40, "mf": false, "installed": false},
+        {"id": "Aratako/Irodori-TTS-v4.1-Small", "name": "標準", "steps": 24, "mf": false, "installed": false},
+        {"id": "phasefield-audio/Irodori-TTS-v4.1-Anime", "name": "Anime", "steps": 24, "mf": false, "installed": false},
         {"id": "Aratako/Irodori-TTS-v4.1-Small-MF", "name": "MF（高速）", "steps": 4, "mf": true, "installed": false},
     ])
 }

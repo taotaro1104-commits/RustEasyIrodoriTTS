@@ -58,7 +58,7 @@ pub struct Args {
     #[arg(long)]
     pub caption: Option<String>,
 
-    /// サンプリングのステップ数（既定: RF は 40、MeanFlow は 4）。
+    /// サンプリングのステップ数（既定: RF は 24、MeanFlow は 4）。
     #[arg(long)]
     pub steps: Option<usize>,
 

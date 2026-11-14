@@ -48,10 +48,10 @@ pub struct SamplerParams {
 }
 
 impl Default for SamplerParams {
-    /// Easy 版 `DEFAULT_GENERATION` と同じ既定値。
+    /// Easy 版 `DEFAULT_GENERATION` と同じ既定値。ただしステップ数だけは 40 でなく 24（docs/bench.md）。
     fn default() -> Self {
         Self {
-            num_steps: 40,
+            num_steps: 24,
             cfg_text: 3.0,
             cfg_caption: 4.0,
             cfg_speaker: 5.0,
@@ -324,6 +324,12 @@ mod tests {
 
     fn quick(steps: usize) -> SamplerParams {
         SamplerParams { num_steps: steps, ..SamplerParams::default() }
+    }
+
+    #[test]
+    fn the_default_step_count_is_24() {
+        // 40 step の出力に最も近く、CER も同等だった最小の値（docs/bench.md）。MeanFlow は別に 4 step。
+        assert_eq!(SamplerParams::default().num_steps, 24);
     }
 
     #[test]
