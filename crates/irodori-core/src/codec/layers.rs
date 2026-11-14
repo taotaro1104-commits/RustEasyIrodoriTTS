@@ -63,6 +63,9 @@ pub fn reflect_pad_right(x: &Tensor, pad: usize) -> Result<Tensor> {
     Ok(Tensor::cat(&[x, &x.index_select(&idx, 2)?], 2)?)
 }
 
+/// `forward_conv2d` を使い始める `c_in * len`（`Conv1d::prefers_conv2d`）。
+const CONV2D_MIN_ELEMS: usize = 4_000_000;
+
 pub struct Conv1d {
     weight: Tensor,
     /// k=1・stride 1・padding 0 の畳み込み用に `(c_out, c_in)` へ整形した重み（im2col を避けて行列積にする）。
@@ -90,10 +93,48 @@ impl Conv1d {
     }
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        let y = match &self.pointwise {
-            Some(w) => w.broadcast_matmul(x)?,
-            None => x.conv1d(&self.weight, self.padding, self.stride, self.dilation, 1)?,
+        if let Some(w) = &self.pointwise {
+            return self.with_bias(w.broadcast_matmul(x)?);
+        }
+        let (_, c_in, len) = x.dims3()?;
+        // conv2d の経路は F32 の大きい活性だけ（BF16 などは従来どおり im2col）。
+        if x.dtype() == DType::F32 && Self::prefers_conv2d(c_in, len) {
+            self.forward_conv2d(x)
+        } else {
+            self.forward_im2col(x)
+        }
+    }
+
+    /// conv2d の経路（タイル化 im2col を rayon で並列）を使うほうが速い大きさか。
+    /// 実測（Ryzen 5 3400G、8 スレッド）: `c_in * len` が約 900 万（長さ 48000 / 96000）の層は約 2 倍速く、
+    /// 約 46 万〜230 万（長さ 600 / 6000）の層は im2col のほうが速い。
+    pub(crate) fn prefers_conv2d(c_in: usize, len: usize) -> bool {
+        c_in * len >= CONV2D_MIN_ELEMS
+    }
+
+    /// Candle の conv1d（全体を展開する im2col と行列積 1 回）。
+    pub(crate) fn forward_im2col(&self, x: &Tensor) -> Result<Tensor> {
+        self.with_bias(x.conv1d(&self.weight, self.padding, self.stride, self.dilation, 1)?)
+    }
+
+    /// `(b, c, len)` を `(b, c, 1, len)` として conv2d（タイル化 im2col）へ載せる。padding は先に自前で入れる
+    /// （conv2d の padding は高さにも掛かるため）。出力は `forward_im2col` と同じ（浮動小数の丸め以外）。
+    pub(crate) fn forward_conv2d(&self, x: &Tensor) -> Result<Tensor> {
+        let padded;
+        let x = if self.padding > 0 {
+            padded = x.pad_with_zeros(2, self.padding, self.padding)?;
+            &padded
+        } else {
+            x
         };
+        let y = x
+            .unsqueeze(2)?
+            .conv2d(&self.weight.unsqueeze(2)?, 0, self.stride, self.dilation, 1)?
+            .squeeze(2)?;
+        self.with_bias(y)
+    }
+
+    fn with_bias(&self, y: Tensor) -> Result<Tensor> {
         match &self.bias {
             Some(b) => Ok(y.broadcast_add(&b.reshape((1, b.dim(0)?, 1))?)?),
             None => Ok(y),
@@ -110,6 +151,8 @@ pub struct ConvT1d {
 
 impl ConvT1d {
     pub fn new(weight: Tensor, bias: Option<Tensor>, padding: usize, stride: usize) -> Self {
+        // col2im の高速経路は、連続した重みでしか使われない。
+        let weight = weight.contiguous().expect("a weight tensor can be made contiguous");
         Self { weight, bias, padding, stride }
     }
 
@@ -120,11 +163,31 @@ impl ConvT1d {
     }
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        let y = x.conv_transpose1d(&self.weight, self.padding, 0, self.stride, 1, 1)?;
+        // Candle 0.11.1 の col2im の経路（padding 0）はバッチが 2 以上だと結果が誤るので、1 件ずつ処理する。
+        let batch = x.dim(0)?;
+        let y = if batch == 1 {
+            self.forward_one(x)?
+        } else {
+            let items = (0..batch)
+                .map(|i| self.forward_one(&x.narrow(0, i, 1)?))
+                .collect::<Result<Vec<_>>>()?;
+            Tensor::cat(&items, 0)?
+        };
         match &self.bias {
             Some(b) => Ok(y.broadcast_add(&b.reshape((1, b.dim(0)?, 1))?)?),
             None => Ok(y),
         }
+    }
+
+    /// バッチ 1 の転置畳み込み（bias なし）。Candle は padding が 0 のときだけ高速な col2im の経路を通る。
+    /// padding 0 で計算してから両端を `padding` ずつ切り落とすと、同じ出力が約 2 倍速く得られる（実測）。
+    fn forward_one(&self, x: &Tensor) -> Result<Tensor> {
+        let y = x.conv_transpose1d(&self.weight, 0, 0, self.stride, 1, 1)?;
+        if self.padding == 0 {
+            return Ok(y);
+        }
+        let len = y.dim(2)?;
+        Ok(y.narrow(2, self.padding, len - 2 * self.padding)?.contiguous()?)
     }
 }
 
@@ -158,7 +221,7 @@ mod tests {
     use super::*;
     use crate::golden::assert_close;
     use crate::nn::test_util::t;
-    use candle_core::Tensor;
+    use candle_core::{Device, Tensor};
 
     #[test]
     fn snake_matches_formula() {
@@ -284,6 +347,112 @@ mod tests {
             time(&format!("convT cin={cin} cout={cout} len={len} s={stride}"), flops, &|| {
                 ct.forward(&x).unwrap();
             });
+        }
+    }
+
+    /// 転置畳み込みの参照実装（Candle の padding 付き経路そのまま）。
+    fn convt_reference(x: &Tensor, w: &Tensor, b: Option<&Tensor>, padding: usize, stride: usize) -> Tensor {
+        let y = x.conv_transpose1d(w, padding, 0, stride, 1, 1).unwrap();
+        match b {
+            Some(b) => y.broadcast_add(&b.reshape((1, b.dim(0).unwrap(), 1)).unwrap()).unwrap(),
+            None => y,
+        }
+    }
+
+    #[test]
+    fn transposed_conv_matches_the_padded_reference_for_every_decoder_shape() {
+        // 実 decoder の stride（12, 10, 8, 2）と、padding = ceil(stride / 2)。バッチ 2・bias あり／なし。
+        let dev = Device::Cpu;
+        for (cin, cout, len, stride) in [(6usize, 4usize, 5usize, 12usize), (5, 3, 7, 10), (4, 6, 9, 8), (3, 2, 11, 2)] {
+            for with_bias in [true, false] {
+                let x = Tensor::randn(0f32, 1f32, (2, cin, len), &dev).unwrap();
+                let w = Tensor::randn(0f32, 0.3f32, (cin, cout, 2 * stride), &dev).unwrap();
+                let b = Tensor::randn(0f32, 1f32, cout, &dev).unwrap();
+                let padding = stride.div_ceil(2);
+                let conv = ConvT1d::new(w.clone(), with_bias.then(|| b.clone()), padding, stride);
+                let got = conv.forward(&x).unwrap();
+                let want = convt_reference(&x, &w, with_bias.then_some(&b), padding, stride);
+                assert_eq!(got.dims(), want.dims(), "s={stride}");
+                crate::golden::assert_close(&got, &want, 1e-4, 1e-5).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn transposed_conv_is_correct_for_batches_larger_than_one() {
+        // Candle の col2im の経路はバッチ 2 以上で誤る（0.11.1）。バッチごとに素朴な実装と照合する。
+        let dev = Device::Cpu;
+        let (cin, cout, len, stride, pad) = (4usize, 3usize, 5usize, 2usize, 1usize);
+        let k = 2 * stride;
+        let x = Tensor::randn(0f32, 1f32, (3, cin, len), &dev).unwrap();
+        let w = Tensor::randn(0f32, 0.3f32, (cin, cout, k), &dev).unwrap();
+        let xv = x.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+        let wv = w.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+        let full = (len - 1) * stride + k;
+        let mut naive = vec![0f32; 3 * cout * full];
+        for b in 0..3 {
+            for ci in 0..cin {
+                for l in 0..len {
+                    for co in 0..cout {
+                        for kk in 0..k {
+                            naive[b * cout * full + co * full + l * stride + kk] += xv[b * cin * len + ci * len + l] * wv[ci * cout * k + co * k + kk];
+                        }
+                    }
+                }
+            }
+        }
+        let want = Tensor::from_vec(naive, (3, cout, full), &dev).unwrap().narrow(2, pad, full - 2 * pad).unwrap();
+        let got = ConvT1d::new(w, None, pad, stride).forward(&x).unwrap();
+        crate::golden::assert_close(&got, &want, 1e-5, 1e-5).unwrap();
+    }
+
+    #[test]
+    fn transposed_conv_without_padding_is_unchanged() {
+        let dev = Device::Cpu;
+        let x = Tensor::randn(0f32, 1f32, (1, 4, 6), &dev).unwrap();
+        let w = Tensor::randn(0f32, 0.3f32, (4, 3, 4), &dev).unwrap();
+        let got = ConvT1d::new(w.clone(), None, 0, 2).forward(&x).unwrap();
+        crate::golden::assert_close(&got, &convt_reference(&x, &w, None, 0, 2), 1e-5, 0.0).unwrap();
+    }
+
+    #[test]
+    fn conv2d_path_matches_the_im2col_path() {
+        // 実 decoder・encoder の形（k=7、dilation 1/3、stride 1/2）と、小さな形。
+        let dev = Device::Cpu;
+        for (c_in, c_out, len, k, dil, stride) in [(8usize, 8usize, 40usize, 7usize, 1usize, 1usize), (6, 6, 64, 7, 3, 1), (4, 8, 50, 7, 1, 2), (5, 5, 33, 3, 2, 1)] {
+            for with_bias in [true, false] {
+                let x = Tensor::randn(0f32, 1f32, (2, c_in, len), &dev).unwrap();
+                let w = Tensor::randn(0f32, 0.2f32, (c_out, c_in, k), &dev).unwrap();
+                let b = Tensor::randn(0f32, 1f32, c_out, &dev).unwrap();
+                let padding = dil * (k - 1) / 2;
+                let conv = Conv1d::new(w, with_bias.then_some(b), padding, stride, dil);
+                let want = conv.forward_im2col(&x).unwrap();
+                let got = conv.forward_conv2d(&x).unwrap();
+                assert_eq!(got.dims(), want.dims(), "c={c_in} k={k} dil={dil} s={stride}");
+                crate::golden::assert_close(&got, &want, 1e-4, 1e-5).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn conv2d_path_is_chosen_only_for_large_activations() {
+        // 実測: 長さ 48000 / 96000 の層は conv2d が約 2 倍速く、長さ 600 / 6000 の層は im2col が速い。
+        assert!(Conv1d::prefers_conv2d(192, 48000));
+        assert!(Conv1d::prefers_conv2d(96, 96000));
+        assert!(!Conv1d::prefers_conv2d(768, 600));
+        assert!(!Conv1d::prefers_conv2d(384, 6000));
+    }
+
+    #[test]
+    fn forward_picks_the_same_result_on_either_side_of_the_threshold() {
+        let dev = Device::Cpu;
+        // 閾値の上（c * len が大きい）でも下でも、出力は im2col と一致する。
+        for (c, len) in [(4usize, 64usize), (16, 300_000)] {
+            let x = Tensor::randn(0f32, 1f32, (1, c, len), &dev).unwrap();
+            let w = Tensor::randn(0f32, 0.1f32, (c, c, 7), &dev).unwrap();
+            let conv = Conv1d::new(w, None, 9, 1, 3);
+            let want = conv.forward_im2col(&x).unwrap();
+            crate::golden::assert_close(&conv.forward(&x).unwrap(), &want, 1e-4, 1e-5).unwrap();
         }
     }
 }
