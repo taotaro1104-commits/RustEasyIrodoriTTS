@@ -2,7 +2,9 @@
 //! HF キャッシュ互換のフォルダへ置く。
 
 mod error;
+mod fetch;
 mod hub;
 
 pub use error::DownloadError;
+pub use fetch::{partial_path, Transfer};
 pub use hub::{host_allowed, HostPolicy, Hub, PlannedFile, RepoPlan, HF_BASE};

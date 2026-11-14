@@ -120,6 +120,10 @@ impl FakeHub {
         }
     }
 
+    pub fn port(&self) -> u16 {
+        self.addr.port()
+    }
+
     pub fn base_url(&self) -> String {
         format!("http://{}", self.addr)
     }
